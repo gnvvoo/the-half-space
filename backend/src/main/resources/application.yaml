@@ -1,3 +1,26 @@
 spring:
   application:
     name: the-half-space
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/halfspace
+    username: admin
+    password: 1245
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create  # 개발 중에는 create, 나중에 validate로 변경
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  cli:
+    path: ./cli/football-cli

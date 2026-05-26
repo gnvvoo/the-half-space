@@ -3,8 +3,10 @@ package com.thehalfspace.batch;
 import com.thehalfspace.client.FootballApiClient;
 import com.thehalfspace.entity.Competition;
 import com.thehalfspace.entity.Match;
+import com.thehalfspace.entity.Standing;
 import com.thehalfspace.entity.Team;
 import com.thehalfspace.repository.MatchRepository;
+import com.thehalfspace.repository.StandingRepository;
 import com.thehalfspace.repository.TeamRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,7 @@ public class MatchSyncTasklet implements Tasklet {
     private final FootballApiClient apiClient;
     private final MatchRepository matchRepository;
     private final TeamRepository teamRepository;
+    private final StandingRepository standingRepository;
 
     private record DateRange(LocalDate from, LocalDate to) {}
 
@@ -35,8 +38,9 @@ public class MatchSyncTasklet implements Tasklet {
         for (Competition competition : Competition.values()) {
             try {
                 syncCompetition(competition);
+                syncStandings(competition);
             } catch (Exception e) {
-                log.error("경기 동기화 실패 - {}: {}", competition.getCompetitionId(), e.getMessage());
+                log.error("동기화 실패 - {}: {}", competition.getCompetitionId(), e.getMessage());
             }
         }
         return RepeatStatus.FINISHED;
@@ -103,6 +107,36 @@ public class MatchSyncTasklet implements Tasklet {
         }).orElseGet(() -> teamRepository.save(
                 Team.of(dto.id(), dto.name(), dto.shortName(), dto.tla(), dto.crest(), competitionId)
         ));
+    }
+
+    private void syncStandings(Competition competition) {
+        var entries = apiClient.fetchStandings(competition);
+        if (entries.isEmpty()) {
+            log.info("순위 데이터 없음 - {}", competition.getCompetitionId());
+            return;
+        }
+
+        String season = currentSeason();
+        standingRepository.deleteByCompetitionIdAndSeason(competition.getCompetitionId(), season);
+
+        for (var entry : entries) {
+            Team team = resolveTeam(entry.team(), competition.getCompetitionId());
+            standingRepository.save(Standing.of(
+                    competition.getCompetitionId(), season, team,
+                    entry.position(), entry.playedGames(),
+                    entry.won(), entry.draw(), entry.lost(),
+                    entry.goalsFor(), entry.goalsAgainst(),
+                    entry.goalDifference(), entry.points()
+            ));
+        }
+
+        log.info("순위 동기화 완료 - {} ({} 팀)", competition.getCompetitionId(), entries.size());
+    }
+
+    private String currentSeason() {
+        LocalDate now = LocalDate.now(ZoneOffset.UTC);
+        int startYear = now.getMonthValue() >= 8 ? now.getYear() : now.getYear() - 1;
+        return startYear + "-" + String.format("%02d", (startYear + 1) % 100);
     }
 
     private String deriveSeason(Instant utcDate) {

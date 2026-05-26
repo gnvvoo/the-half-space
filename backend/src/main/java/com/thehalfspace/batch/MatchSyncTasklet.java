@@ -14,6 +14,7 @@ import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -30,6 +31,7 @@ public class MatchSyncTasklet implements Tasklet {
     private final MatchRepository matchRepository;
     private final TeamRepository teamRepository;
     private final StandingRepository standingRepository;
+    private final CacheManager cacheManager;
 
     private record DateRange(LocalDate from, LocalDate to) {}
 
@@ -43,6 +45,7 @@ public class MatchSyncTasklet implements Tasklet {
                 log.error("동기화 실패 - {}: {}", competition.getCompetitionId(), e.getMessage());
             }
         }
+        evictCaches();
         return RepeatStatus.FINISHED;
     }
 
@@ -107,6 +110,14 @@ public class MatchSyncTasklet implements Tasklet {
         }).orElseGet(() -> teamRepository.save(
                 Team.of(dto.id(), dto.name(), dto.shortName(), dto.tla(), dto.crest(), competitionId)
         ));
+    }
+
+    private void evictCaches() {
+        var matchesCache = cacheManager.getCache("matches");
+        var standingsCache = cacheManager.getCache("standings");
+        if (matchesCache != null) matchesCache.clear();
+        if (standingsCache != null) standingsCache.clear();
+        log.info("캐시 무효화 완료");
     }
 
     private void syncStandings(Competition competition) {

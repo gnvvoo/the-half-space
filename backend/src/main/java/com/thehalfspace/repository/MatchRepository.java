@@ -17,4 +17,6 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     List<Match> findByStatus(String status);
 
     List<Match> findByCompetitionIdAndStatus(String competitionId, String status);
+
+    long countByCompetitionId(String competitionId);
 }

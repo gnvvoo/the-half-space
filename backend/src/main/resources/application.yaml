@@ -31,3 +31,8 @@ spring:
 cli:
   path: ./cli/football-cli
   api-key: ${FOOTBALL_DATA_API_KEY:}
+
+football:
+  api:
+    base-url: https://api.football-data.org/v4
+    token: ${FOOTBALL_DATA_API_KEY:}

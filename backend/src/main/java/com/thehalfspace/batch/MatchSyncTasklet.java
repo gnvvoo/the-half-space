@@ -1,7 +1,6 @@
 package com.thehalfspace.batch;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.thehalfspace.cli.CliRunner;
+import com.thehalfspace.client.FootballApiClient;
 import com.thehalfspace.entity.Competition;
 import com.thehalfspace.entity.Match;
 import com.thehalfspace.entity.Team;
@@ -25,92 +24,91 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class MatchSyncTasklet implements Tasklet {
 
-    private final CliRunner cliRunner;
+    private final FootballApiClient apiClient;
     private final MatchRepository matchRepository;
     private final TeamRepository teamRepository;
 
+    private record DateRange(LocalDate from, LocalDate to) {}
+
     @Override
-    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
         for (Competition competition : Competition.values()) {
             try {
                 syncCompetition(competition);
             } catch (Exception e) {
-                log.error("경기 동기화 실패 - competition: {}, error: {}", competition.getCliCode(), e.getMessage());
+                log.error("경기 동기화 실패 - {}: {}", competition.getCompetitionId(), e.getMessage());
             }
         }
         return RepeatStatus.FINISHED;
     }
 
-    private void syncCompetition(Competition competition) throws Exception {
-        log.info("경기 동기화 시작 - {}", competition.getCliCode());
+    private void syncCompetition(Competition competition) {
+        DateRange range = getDateRange(competition);
+        log.info("경기 동기화 시작 - {} ({} ~ {})",
+                competition.getCompetitionId(), range.from(), range.to());
 
-        JsonNode root = cliRunner.runJson("matches", "--league", competition.getCliCode());
-        JsonNode matches = root.get("matches");
-
-        if (matches == null || !matches.isArray()) {
-            log.warn("경기 데이터 없음 - {}", competition.getCliCode());
+        var matches = apiClient.fetchMatches(competition, range.from(), range.to());
+        if (matches.isEmpty()) {
+            log.info("조회된 경기 없음 - {}", competition.getCompetitionId());
             return;
         }
 
         int saved = 0, updated = 0;
 
-        for (JsonNode node : matches) {
-            long matchId       = node.get("id").asLong();
-            String status      = node.get("status").asText();
-            Instant utcDate    = Instant.parse(node.get("date").asText());
-            String homeTeamName = node.get("home_team").asText();
-            String awayTeamName = node.get("away_team").asText();
-            String venue       = node.get("venue").asText(null);
+        for (var dto : matches) {
+            Integer homeScore = dto.score().fullTime().home();
+            Integer awayScore = dto.score().fullTime().away();
+            Instant utcDate   = Instant.parse(dto.utcDate());
 
-            JsonNode score     = node.get("score");
-            Integer homeScore  = score.get("home").isNull() ? null : score.get("home").asInt();
-            Integer awayScore  = score.get("away").isNull() ? null : score.get("away").asInt();
-            String winner      = deriveWinner(status, homeScore, awayScore);
-
-            Optional<Match> existing = matchRepository.findById(matchId);
+            Optional<Match> existing = matchRepository.findById(dto.id());
             if (existing.isPresent()) {
-                existing.get().update(status, homeScore, awayScore, winner);
-                matchRepository.save(existing.get());
+                existing.get().update(dto.status(), homeScore, awayScore, dto.score().winner());
                 updated++;
             } else {
-                Team homeTeam = resolveTeam(homeTeamName, competition.getCompetitionId());
-                Team awayTeam = resolveTeam(awayTeamName, competition.getCompetitionId());
-                String season = deriveSeason(utcDate);
+                Team homeTeam = resolveTeam(dto.homeTeam(), competition.getCompetitionId());
+                Team awayTeam = resolveTeam(dto.awayTeam(), competition.getCompetitionId());
 
-                Match match = Match.of(
-                        matchId, competition.getCompetitionId(), season,
-                        homeTeam, awayTeam, status, utcDate,
-                        homeScore, awayScore, winner,
-                        (venue != null && !venue.isBlank()) ? venue : null
-                );
-                matchRepository.save(match);
+                matchRepository.save(Match.of(
+                        dto.id(), competition.getCompetitionId(), deriveSeason(utcDate),
+                        homeTeam, awayTeam, dto.status(), dto.matchday(), utcDate,
+                        homeScore, awayScore, dto.score().winner(),
+                        (dto.venue() != null && !dto.venue().isBlank()) ? dto.venue() : null
+                ));
                 saved++;
             }
         }
 
-        log.info("동기화 완료 - {} | 저장: {}, 업데이트: {}", competition.getCliCode(), saved, updated);
+        log.info("동기화 완료 - {} | 저장: {}, 업데이트: {}",
+                competition.getCompetitionId(), saved, updated);
     }
 
-    // 팀명으로 조회, 없으면 해시 기반 id로 신규 생성
-    private Team resolveTeam(String name, String competitionId) {
-        return teamRepository.findByName(name).orElseGet(() -> {
-            long syntheticId = name.hashCode() & 0xFFFFFFFFL;
-            return teamRepository.save(Team.of(syntheticId, name, competitionId));
-        });
+    // DB가 비어있으면 시즌 전체, 아니면 최근 3일 + 향후 7일
+    private DateRange getDateRange(Competition competition) {
+        if (matchRepository.countByCompetitionId(competition.getCompetitionId()) == 0) {
+            LocalDate now = LocalDate.now(ZoneOffset.UTC);
+            int startYear = now.getMonthValue() >= 8 ? now.getYear() : now.getYear() - 1;
+            return new DateRange(
+                    LocalDate.of(startYear, 8, 1),
+                    LocalDate.of(startYear + 1, 6, 1)
+            );
+        }
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        return new DateRange(today.minusDays(3), today.plusDays(7));
     }
 
-    // 날짜로 시즌 문자열 계산 (8월 이후 = 새 시즌)
+    private Team resolveTeam(FootballApiClient.TeamDto dto, String competitionId) {
+        return teamRepository.findById(dto.id()).map(team -> {
+            team.update(dto.name(), dto.shortName(), dto.tla(), dto.crest());
+            return teamRepository.save(team);
+        }).orElseGet(() -> teamRepository.save(
+                Team.of(dto.id(), dto.name(), dto.shortName(), dto.tla(), dto.crest(), competitionId)
+        ));
+    }
+
     private String deriveSeason(Instant utcDate) {
         LocalDate date = utcDate.atZone(ZoneOffset.UTC).toLocalDate();
         int year = date.getYear();
         int startYear = date.getMonthValue() >= 8 ? year : year - 1;
         return startYear + "-" + String.format("%02d", (startYear + 1) % 100);
-    }
-
-    private String deriveWinner(String status, Integer homeScore, Integer awayScore) {
-        if (!"FINISHED".equals(status) || homeScore == null || awayScore == null) return null;
-        if (homeScore > awayScore) return "HOME_TEAM";
-        if (homeScore < awayScore) return "AWAY_TEAM";
-        return "DRAW";
     }
 }

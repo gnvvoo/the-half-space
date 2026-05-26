@@ -33,10 +33,24 @@ public class Team {
     @Column(name = "created_at", updatable = false)
     private Instant createdAt = Instant.now();
 
-    // 이름으로 임시 Team 생성 (CLI 파싱용)
-    public static Team ofName(String name) {
+    // API 응답으로 Team 생성
+    public static Team of(Long id, String name, String shortName,
+                          String tla, String crestUrl, String competitionId) {
         Team team = new Team();
-        team.name = name;
+        team.id            = id;
+        team.name          = name;
+        team.shortName     = shortName;
+        team.tla           = tla;
+        team.crestUrl      = crestUrl;
+        team.competitionId = competitionId;
         return team;
+    }
+
+    // 팀 정보 업데이트 (API 재조회 시)
+    public void update(String name, String shortName, String tla, String crestUrl) {
+        this.name      = name;
+        this.shortName = shortName;
+        this.tla       = tla;
+        this.crestUrl  = crestUrl;
     }
 }

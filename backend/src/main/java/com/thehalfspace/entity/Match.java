@@ -74,10 +74,11 @@ public class Match {
         this.fetchedAt = Instant.now();
     }
 
-    // CLI 응답으로 Match 생성
+    // API 응답으로 Match 생성
     public static Match of(Long id, String competitionId, String season,
                            Team homeTeam, Team awayTeam, String status,
-                           Instant utcDate, Integer homeScore, Integer awayScore,
+                           Integer matchDay, Instant utcDate,
+                           Integer homeScore, Integer awayScore,
                            String winner, String venue) {
         Match match = new Match();
         match.id            = id;
@@ -86,6 +87,7 @@ public class Match {
         match.homeTeam      = homeTeam;
         match.awayTeam      = awayTeam;
         match.status        = status;
+        match.matchDay      = matchDay;
         match.utcDate       = utcDate;
         match.homeScore     = homeScore;
         match.awayScore     = awayScore;

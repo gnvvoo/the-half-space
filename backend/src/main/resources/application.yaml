@@ -22,5 +22,17 @@ spring:
       host: localhost
       port: 6379
 
-  cli:
-    path: ./cli/football-cli
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      enabled: false  # 스케줄러로만 실행, 애플리케이션 시작 시 자동 실행 방지
+
+cli:
+  path: ./cli/football-cli
+  api-key: ${FOOTBALL_DATA_API_KEY:}
+
+football:
+  api:
+    base-url: https://api.football-data.org/v4
+    token: ${FOOTBALL_DATA_API_KEY:}

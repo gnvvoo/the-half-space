@@ -39,4 +39,13 @@ public class Team {
         team.name = name;
         return team;
     }
+
+    // CLI 경기 파싱 시 팀명으로 생성 (id는 이름 해시값으로 대체)
+    public static Team of(Long id, String name, String competitionId) {
+        Team team = new Team();
+        team.id            = id;
+        team.name          = name;
+        team.competitionId = competitionId;
+        return team;
+    }
 }

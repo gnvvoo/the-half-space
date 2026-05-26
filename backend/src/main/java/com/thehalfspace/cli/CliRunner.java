@@ -19,6 +19,9 @@ public class CliRunner {
     @Value("${cli.path:./cli/football-cli}")
     private String cliPath;
 
+    @Value("${cli.api-key:}")
+    private String apiKey;
+
     // CLI 실행 결과 보관
     public record CliResult(String stdout, String stderr, int exitCode) {
         public boolean isSuccess() { return exitCode == 0; }
@@ -37,6 +40,10 @@ public class CliRunner {
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(false);
+
+            if (apiKey != null && !apiKey.isBlank()) {
+                pb.environment().put("FOOTBALL_DATA_API_KEY", apiKey);
+            }
 
             Process process = pb.start();
 
@@ -71,7 +78,9 @@ public class CliRunner {
 
         CliResult result = run(fullArgs.toArray(new String[0]));
 
-        if (!result.isSuccess()) {
+        if (result.isNoData()) {
+            log.info("CLI 데이터 없음 - exitCode: {}", result.exitCode());
+        } else if (!result.isSuccess()) {
             log.warn("CLI 비정상 종료 - exitCode: {}, stderr: {}", result.exitCode(), result.stderr());
         }
 

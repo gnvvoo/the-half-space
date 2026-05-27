@@ -4,6 +4,7 @@ import com.thehalfspace.dto.MatchResponse;
 import com.thehalfspace.exception.NotFoundException;
 import com.thehalfspace.repository.MatchRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ public class MatchService {
 
     private final MatchRepository matchRepository;
 
+    @Cacheable(value = "matches", key = "#competitionId + ':' + #from + ':' + #to")
     public List<MatchResponse> getMatches(String competitionId, LocalDate from, LocalDate to) {
         var fromInstant = from.atStartOfDay(ZoneOffset.UTC).toInstant();
         var toInstant   = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();

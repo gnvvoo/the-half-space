@@ -3,6 +3,7 @@ package com.thehalfspace.service;
 import com.thehalfspace.dto.StandingResponse;
 import com.thehalfspace.repository.StandingRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ public class StandingService {
 
     private final StandingRepository standingRepository;
 
+    @Cacheable(value = "standings", key = "#competitionId")
     public List<StandingResponse> getStandings(String competitionId) {
         return standingRepository
                 .findByCompetitionIdAndSeasonOrderByPosition(competitionId, currentSeason())

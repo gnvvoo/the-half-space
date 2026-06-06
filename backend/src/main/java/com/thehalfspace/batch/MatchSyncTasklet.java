@@ -8,6 +8,7 @@ import com.thehalfspace.entity.Team;
 import com.thehalfspace.repository.MatchRepository;
 import com.thehalfspace.repository.StandingRepository;
 import com.thehalfspace.repository.TeamRepository;
+import com.thehalfspace.util.SeasonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.StepContribution;
@@ -76,7 +77,7 @@ public class MatchSyncTasklet implements Tasklet {
                 Team awayTeam = resolveTeam(dto.awayTeam(), competition.getCompetitionId());
 
                 matchRepository.save(Match.of(
-                        dto.id(), competition.getCompetitionId(), deriveSeason(utcDate),
+                        dto.id(), competition.getCompetitionId(), SeasonUtils.deriveSeason(utcDate),
                         homeTeam, awayTeam, dto.status(), dto.matchday(), utcDate,
                         homeScore, awayScore, dto.score().winner(),
                         (dto.venue() != null && !dto.venue().isBlank()) ? dto.venue() : null
@@ -127,7 +128,7 @@ public class MatchSyncTasklet implements Tasklet {
             return;
         }
 
-        String season = currentSeason();
+        String season = SeasonUtils.currentSeason();
         standingRepository.deleteByCompetitionIdAndSeason(competition.getCompetitionId(), season);
 
         for (var entry : entries) {
@@ -144,16 +145,4 @@ public class MatchSyncTasklet implements Tasklet {
         log.info("순위 동기화 완료 - {} ({} 팀)", competition.getCompetitionId(), entries.size());
     }
 
-    private String currentSeason() {
-        LocalDate now = LocalDate.now(ZoneOffset.UTC);
-        int startYear = now.getMonthValue() >= 8 ? now.getYear() : now.getYear() - 1;
-        return startYear + "-" + String.format("%02d", (startYear + 1) % 100);
-    }
-
-    private String deriveSeason(Instant utcDate) {
-        LocalDate date = utcDate.atZone(ZoneOffset.UTC).toLocalDate();
-        int year = date.getYear();
-        int startYear = date.getMonthValue() >= 8 ? year : year - 1;
-        return startYear + "-" + String.format("%02d", (startYear + 1) % 100);
-    }
 }

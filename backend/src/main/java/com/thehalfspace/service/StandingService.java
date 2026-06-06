@@ -2,13 +2,12 @@ package com.thehalfspace.service;
 
 import com.thehalfspace.dto.StandingResponse;
 import com.thehalfspace.repository.StandingRepository;
+import com.thehalfspace.util.SeasonUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
@@ -21,15 +20,9 @@ public class StandingService {
     @Cacheable(value = "standings", key = "#competitionId")
     public List<StandingResponse> getStandings(String competitionId) {
         return standingRepository
-                .findByCompetitionIdAndSeasonOrderByPosition(competitionId, currentSeason())
+                .findByCompetitionIdAndSeasonOrderByPosition(competitionId, SeasonUtils.currentSeason())
                 .stream()
                 .map(StandingResponse::from)
                 .toList();
-    }
-
-    private String currentSeason() {
-        LocalDate now = LocalDate.now(ZoneOffset.UTC);
-        int startYear = now.getMonthValue() >= 8 ? now.getYear() : now.getYear() - 1;
-        return startYear + "-" + String.format("%02d", (startYear + 1) % 100);
     }
 }

@@ -2,6 +2,7 @@
 package com.thehalfspace.entity;
 
 import java.util.Arrays;
+import java.util.function.Predicate;
 
 public enum Competition {
 
@@ -25,30 +26,22 @@ public enum Competition {
     public String getFullName()      { return fullName; }
     public String getCliCode()       { return cliCode; }
 
-    // CLI 풀네임으로 찾기 (CLI 응답 파싱 시)
     public static Competition fromFullName(String fullName) {
-        return Arrays.stream(values())
-                .filter(c -> c.fullName.equals(fullName))
-                .findFirst()
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Unknown league: " + fullName));
+        return findBy(c -> c.fullName.equals(fullName), "league", fullName);
     }
 
-    // DB competitionId로 찾기
     public static Competition fromCompetitionId(String competitionId) {
-        return Arrays.stream(values())
-                .filter(c -> c.competitionId.equals(competitionId))
-                .findFirst()
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Unknown competitionId: " + competitionId));
+        return findBy(c -> c.competitionId.equals(competitionId), "competitionId", competitionId);
     }
 
-    // CLI 약어로 찾기 (CLI 호출 시)
     public static Competition fromCliCode(String cliCode) {
+        return findBy(c -> c.cliCode.equals(cliCode), "CLI code", cliCode);
+    }
+
+    private static Competition findBy(Predicate<Competition> predicate, String label, String value) {
         return Arrays.stream(values())
-                .filter(c -> c.cliCode.equals(cliCode))
+                .filter(predicate)
                 .findFirst()
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Unknown CLI code: " + cliCode));
+                .orElseThrow(() -> new IllegalArgumentException("Unknown " + label + ": " + value));
     }
 }

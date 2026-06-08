@@ -22,13 +22,13 @@ public record MatchResponse(
                 match.getCompetitionId(),
                 match.getSeason(),
                 match.getMatchDay(),
-                match.getStatus(),
+                match.getStatus().name(),
                 match.getUtcDate().toString(),
                 TeamSummary.from(match.getHomeTeam()),
                 TeamSummary.from(match.getAwayTeam()),
                 match.getHomeScore(),
                 match.getAwayScore(),
-                match.getWinner(),
+                match.getWinner() != null ? match.getWinner().name() : null,
                 match.getVenue()
         );
     }

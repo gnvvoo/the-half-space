@@ -3,11 +3,15 @@ package com.thehalfspace.batch;
 import com.thehalfspace.client.FootballApiClient;
 import com.thehalfspace.entity.Competition;
 import com.thehalfspace.entity.Match;
+import com.thehalfspace.entity.MatchStatus;
+import com.thehalfspace.entity.MatchWinner;
 import com.thehalfspace.entity.Standing;
 import com.thehalfspace.entity.Team;
+import com.thehalfspace.util.SeasonUtils;
 import com.thehalfspace.repository.MatchRepository;
 import com.thehalfspace.repository.StandingRepository;
 import com.thehalfspace.repository.TeamRepository;
+import com.thehalfspace.util.SeasonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.StepContribution;
@@ -67,20 +71,32 @@ public class MatchSyncTasklet implements Tasklet {
             Integer awayScore = dto.score().fullTime().away();
             Instant utcDate   = Instant.parse(dto.utcDate());
 
+            MatchStatus status = MatchStatus.from(dto.status());
+            MatchWinner winner = MatchWinner.from(dto.score().winner());
+
             Optional<Match> existing = matchRepository.findById(dto.id());
             if (existing.isPresent()) {
-                existing.get().update(dto.status(), homeScore, awayScore, dto.score().winner());
+                existing.get().update(status, homeScore, awayScore, winner);
                 updated++;
             } else {
                 Team homeTeam = resolveTeam(dto.homeTeam(), competition.getCompetitionId());
                 Team awayTeam = resolveTeam(dto.awayTeam(), competition.getCompetitionId());
 
-                matchRepository.save(Match.of(
-                        dto.id(), competition.getCompetitionId(), deriveSeason(utcDate),
-                        homeTeam, awayTeam, dto.status(), dto.matchday(), utcDate,
-                        homeScore, awayScore, dto.score().winner(),
-                        (dto.venue() != null && !dto.venue().isBlank()) ? dto.venue() : null
-                ));
+                matchRepository.save(Match.builder()
+                        .id(dto.id())
+                        .competitionId(competition.getCompetitionId())
+                        .season(SeasonUtils.deriveSeason(utcDate))
+                        .homeTeam(homeTeam)
+                        .awayTeam(awayTeam)
+                        .status(status)
+                        .matchDay(dto.matchday())
+                        .utcDate(utcDate)
+                        .homeScore(homeScore)
+                        .awayScore(awayScore)
+                        .winner(winner)
+                        .venue((dto.venue() != null && !dto.venue().isBlank()) ? dto.venue() : null)
+                        .build()
+                );
                 saved++;
             }
         }
@@ -127,7 +143,7 @@ public class MatchSyncTasklet implements Tasklet {
             return;
         }
 
-        String season = currentSeason();
+        String season = SeasonUtils.currentSeason();
         standingRepository.deleteByCompetitionIdAndSeason(competition.getCompetitionId(), season);
 
         for (var entry : entries) {
@@ -144,16 +160,4 @@ public class MatchSyncTasklet implements Tasklet {
         log.info("순위 동기화 완료 - {} ({} 팀)", competition.getCompetitionId(), entries.size());
     }
 
-    private String currentSeason() {
-        LocalDate now = LocalDate.now(ZoneOffset.UTC);
-        int startYear = now.getMonthValue() >= 8 ? now.getYear() : now.getYear() - 1;
-        return startYear + "-" + String.format("%02d", (startYear + 1) % 100);
-    }
-
-    private String deriveSeason(Instant utcDate) {
-        LocalDate date = utcDate.atZone(ZoneOffset.UTC).toLocalDate();
-        int year = date.getYear();
-        int startYear = date.getMonthValue() >= 8 ? year : year - 1;
-        return startYear + "-" + String.format("%02d", (startYear + 1) % 100);
-    }
 }

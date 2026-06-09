@@ -1,6 +1,7 @@
 package com.thehalfspace.service;
 
 import com.thehalfspace.dto.MatchResponse;
+import com.thehalfspace.exception.ErrorCode;
 import com.thehalfspace.exception.NotFoundException;
 import com.thehalfspace.repository.MatchRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,6 @@ public class MatchService {
     public MatchResponse getMatch(Long id) {
         return matchRepository.findById(id)
                 .map(MatchResponse::from)
-                .orElseThrow(() -> new NotFoundException("경기를 찾을 수 없습니다: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.MATCH_NOT_FOUND));
     }
 }

@@ -1,5 +1,6 @@
 package com.thehalfspace.controller;
 
+import com.thehalfspace.dto.ApiResponse;
 import com.thehalfspace.dto.MatchResponse;
 import com.thehalfspace.service.MatchService;
 import lombok.RequiredArgsConstructor;
@@ -17,16 +18,16 @@ public class MatchController {
     private final MatchService matchService;
 
     @GetMapping("/matches")
-    public List<MatchResponse> getMatches(
+    public ApiResponse<List<MatchResponse>> getMatches(
             @RequestParam String competition,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
-        return matchService.getMatches(competition, from, to);
+        return ApiResponse.of(matchService.getMatches(competition, from, to));
     }
 
     @GetMapping("/matches/{id}")
-    public MatchResponse getMatch(@PathVariable Long id) {
-        return matchService.getMatch(id);
+    public ApiResponse<MatchResponse> getMatch(@PathVariable Long id) {
+        return ApiResponse.of(matchService.getMatch(id));
     }
 }

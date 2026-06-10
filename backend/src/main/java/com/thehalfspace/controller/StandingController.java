@@ -1,5 +1,6 @@
 package com.thehalfspace.controller;
 
+import com.thehalfspace.dto.ApiResponse;
 import com.thehalfspace.dto.StandingResponse;
 import com.thehalfspace.service.StandingService;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,7 @@ public class StandingController {
     private final StandingService standingService;
 
     @GetMapping("/standings")
-    public List<StandingResponse> getStandings(@RequestParam String competition) {
-        return standingService.getStandings(competition);
+    public ApiResponse<List<StandingResponse>> getStandings(@RequestParam String competition) {
+        return ApiResponse.of(standingService.getStandings(competition));
     }
 }

@@ -3,6 +3,8 @@ package com.thehalfspace.service;
 import com.thehalfspace.dto.request.AgentRequest;
 import com.thehalfspace.dto.response.AgentResponse;
 import com.thehalfspace.dto.response.AiContentResponse;
+import com.thehalfspace.dto.response.AiPredictionResponse;
+import com.thehalfspace.dto.response.MatchStatsResponse;
 import com.thehalfspace.entity.*;
 import com.thehalfspace.exception.BusinessException;
 import com.thehalfspace.exception.NotFoundException;
@@ -12,9 +14,11 @@ import com.thehalfspace.repository.AiPredictionRepository;
 import com.thehalfspace.repository.MatchRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +36,7 @@ class AiContentServiceTest {
     private AgentService agentService;
     private RedisTemplate<String, Object> redisTemplate;
     private ValueOperations<String, Object> valueOperations;
+    private HashOperations<String, Object, Object> hashOperations;
 
     private AiContentService aiContentService;
 
@@ -45,7 +50,9 @@ class AiContentServiceTest {
         agentService = mock(AgentService.class);
         redisTemplate = mock(RedisTemplate.class);
         valueOperations = mock(ValueOperations.class);
+        hashOperations = mock(HashOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForHash()).thenReturn(hashOperations);
 
         aiContentService = new AiContentService(
                 matchRepository, aiContentRepository, aiPredictionRepository,
@@ -119,5 +126,33 @@ class AiContentServiceTest {
 
         assertThatThrownBy(() -> aiContentService.getPreview(1L))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void getMatchStats_예측과_팬투표_분포를_합쳐서_반환한다() {
+        AiPredictionResponse prediction = new AiPredictionResponse(1L, 60.0, 20.0, 20.0, "2:1", null);
+        when(valueOperations.get("ai:pred:1")).thenReturn(prediction);
+        when(hashOperations.entries("predict:dist:1")).thenReturn(Map.of(
+                "HOME", "10", "DRAW", "3", "AWAY", "5"
+        ));
+
+        MatchStatsResponse stats = aiContentService.getMatchStats(1L);
+
+        assertThat(stats.aiPrediction()).isEqualTo(prediction);
+        assertThat(stats.fanDistribution().home()).isEqualTo(10L);
+        assertThat(stats.fanDistribution().draw()).isEqualTo(3L);
+        assertThat(stats.fanDistribution().away()).isEqualTo(5L);
+    }
+
+    @Test
+    void getMatchStats_예측이_없으면_null로_채우고_팬투표만_반환한다() {
+        when(valueOperations.get("ai:pred:1")).thenReturn(null);
+        when(aiPredictionRepository.findByMatchId(1L)).thenReturn(Optional.empty());
+        when(hashOperations.entries("predict:dist:1")).thenReturn(Map.of());
+
+        MatchStatsResponse stats = aiContentService.getMatchStats(1L);
+
+        assertThat(stats.aiPrediction()).isNull();
+        assertThat(stats.fanDistribution().home()).isEqualTo(0L);
     }
 }

@@ -7,6 +7,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(AgentException.class)
+    public ResponseEntity<ErrorResponse> handleAgent(AgentException e) {
+        ErrorCode errorCode = e.getErrorCode();
+        return ResponseEntity.status(errorCode.getStatus())
+                .body(ErrorResponse.of(errorCode, e.getMessage()));
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusiness(BusinessException e) {
         ErrorCode errorCode = e.getErrorCode();

@@ -4,6 +4,7 @@ import com.thehalfspace.dto.request.AgentRequest;
 import com.thehalfspace.dto.response.AgentResponse;
 import com.thehalfspace.dto.response.AiContentResponse;
 import com.thehalfspace.dto.response.AiPredictionResponse;
+import com.thehalfspace.dto.response.MatchStatsResponse;
 import com.thehalfspace.entity.*;
 import com.thehalfspace.exception.BusinessException;
 import com.thehalfspace.exception.ErrorCode;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -70,6 +72,29 @@ public class AiContentService {
 
         redisTemplate.opsForValue().set(cacheKey, response, PREDICTION_TTL);
         return response;
+    }
+
+    @Transactional(readOnly = true)
+    public MatchStatsResponse getMatchStats(Long matchId) {
+        AiPredictionResponse prediction = null;
+        try {
+            prediction = getAiPrediction(matchId);
+        } catch (NotFoundException e) {
+            log.info("AI 예측 미준비 - matchId: {}", matchId);
+        }
+
+        Map<Object, Object> dist = redisTemplate.opsForHash().entries("predict:dist:" + matchId);
+        MatchStatsResponse.FanDistribution fanDistribution = new MatchStatsResponse.FanDistribution(
+                parseVoteCount(dist.get("HOME")),
+                parseVoteCount(dist.get("DRAW")),
+                parseVoteCount(dist.get("AWAY"))
+        );
+
+        return new MatchStatsResponse(prediction, fanDistribution);
+    }
+
+    private Long parseVoteCount(Object value) {
+        return value != null ? Long.parseLong(value.toString()) : 0L;
     }
 
     private AiContentResponse generate(Long matchId, ContentType contentType, String agentType,

@@ -3,7 +3,6 @@ package com.thehalfspace.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thehalfspace.dto.request.AgentRequest;
 import com.thehalfspace.dto.response.AgentResponse;
-import com.thehalfspace.entity.ContentType;
 import com.thehalfspace.exception.AgentException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,8 +32,8 @@ class AgentServiceTest {
     @Test
     void runAgent_정상_실행_시_AgentResponse를_반환한다() throws Exception {
         String json = """
-                {"body":"본문","summary":"요약","reasoning":null,"tokenUsed":100,
-                 "modelVersion":"gemini-2.5","toolsCalled":null,"prediction":null}
+                {"type":"preview","matchId":1,"body":"본문","summary":"요약","reasoning":null,
+                 "prediction":null,"toolsCalled":null,"totalTokens":100,"modelVersion":"gemini-2.5"}
                 """;
 
         Process mockProcess = mock(Process.class);
@@ -46,7 +45,7 @@ class AgentServiceTest {
         try (MockedConstruction<ProcessBuilder> mocked = mockConstruction(ProcessBuilder.class,
                 (mock, context) -> when(mock.start()).thenReturn(mockProcess))) {
 
-            AgentResponse response = agentService.runAgent(new AgentRequest(ContentType.PREVIEW, 1L));
+            AgentResponse response = agentService.runAgent(new AgentRequest("preview", 1L));
 
             assertThat(response.body()).isEqualTo("본문");
             assertThat(response.modelVersion()).isEqualTo("gemini-2.5");
@@ -63,7 +62,7 @@ class AgentServiceTest {
         try (MockedConstruction<ProcessBuilder> mocked = mockConstruction(ProcessBuilder.class,
                 (mock, context) -> when(mock.start()).thenReturn(mockProcess))) {
 
-            assertThatThrownBy(() -> agentService.runAgent(new AgentRequest(ContentType.PREVIEW, 1L)))
+            assertThatThrownBy(() -> agentService.runAgent(new AgentRequest("preview", 1L)))
                     .isInstanceOf(AgentException.class);
         }
     }
@@ -79,7 +78,7 @@ class AgentServiceTest {
         try (MockedConstruction<ProcessBuilder> mocked = mockConstruction(ProcessBuilder.class,
                 (mock, context) -> when(mock.start()).thenReturn(mockProcess))) {
 
-            assertThatThrownBy(() -> agentService.runAgent(new AgentRequest(ContentType.REVIEW, 2L)))
+            assertThatThrownBy(() -> agentService.runAgent(new AgentRequest("review", 2L)))
                     .isInstanceOf(AgentException.class);
         }
     }

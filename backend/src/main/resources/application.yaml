@@ -66,3 +66,5 @@ app:
     refresh-token-expiry: 1209600  # 14일 (초)
   oauth2:
     redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth2/callback}
+  agent:
+    binary-path: ./bin/football-agent

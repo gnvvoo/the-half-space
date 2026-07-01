@@ -1,15 +1,12 @@
 package com.thehalfspace.dto.response;
 
 public record MatchStatsResponse(
-        Long matchId,
+        AiPredictionResponse aiPrediction,
         FanDistribution fanDistribution
 ) {
     public record FanDistribution(
-            long homeVotes,
-            long drawVotes,
-            long awayVotes,
-            Double homeWinPct,
-            Double drawPct,
-            Double awayWinPct
+            Long home,
+            Long draw,
+            Long away
     ) {}
 }

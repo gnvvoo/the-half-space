@@ -4,19 +4,20 @@ import java.util.List;
 import java.util.Map;
 
 public record AgentResponse(
+        String type,
+        Long matchId,
         String body,
         String summary,
         Map<String, Object> reasoning,
-        Integer tokenUsed,
-        String modelVersion,
+        PredictionResult prediction,
         List<Map<String, Object>> toolsCalled,
-        PredictionResult prediction
+        Integer totalTokens,
+        String modelVersion
 ) {
     public record PredictionResult(
             Double homeWinPct,
             Double drawPct,
             Double awayWinPct,
-            String predictedScore,
-            Map<String, Object> reasoning
+            String predictedScore
     ) {}
 }

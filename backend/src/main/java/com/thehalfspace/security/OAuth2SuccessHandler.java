@@ -93,10 +93,8 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private String extractEmail(OAuthProvider provider, OAuth2User oauth2User) {
         return switch (provider) {
             case GOOGLE -> oauth2User.getAttribute("email");
-            case KAKAO -> {
-                Map<String, Object> kakaoAccount = oauth2User.getAttribute("kakao_account");
-                yield (String) kakaoAccount.get("email");
-            }
+            // TODO: account_email 스코프 임시 비활성화 상태. 복구 시 kakao_account.email로 되돌릴 것
+            case KAKAO -> "kakao_" + oauth2User.getName() + "@kakao.local";
         };
     }
 

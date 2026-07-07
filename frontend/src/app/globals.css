@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fafaf9;
+  --ink: #1c1c1c;
+  --muted: #6b7280;
+  --line: #e5e5e0;
+  --brand: #dc2626;
+  --success: #16a34a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-success: var(--success);
+  --font-sans: "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Nanum Myeongjo", Georgia, "Times New Roman", serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* LIVE badge pulse — spec: opacity 1↔0.35, 1.2s infinite */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.live-pulse-dot {
+  animation: live-pulse 1.2s infinite;
+}

@@ -1,9 +1,12 @@
 import { MainNavbar } from "@/components/layout/MainNavbar";
-import { LeagueMatchSection } from "@/components/home/LeagueMatchSection";
+import { UpcomingMatches } from "@/components/home/LeagueMatchSection";
+import { LeagueInfoCard } from "@/components/home/LeagueInfoCard";
 import { DiscussionSidebar } from "@/components/home/DiscussionSidebar";
-import { fetchAllMatches } from "@/lib/api/matches";
+import { StandingsTable } from "@/components/standings/StandingsTable";
+import { fetchMatchesByLeague } from "@/lib/api/matches";
+import { fetchStandings } from "@/lib/api/standings";
 import { fetchPopularDiscussions } from "@/lib/api/discussions";
-import { LEAGUES, DEFAULT_LEAGUE, isLeagueId } from "@/lib/leagues";
+import { DEFAULT_LEAGUE, isLeagueId, leagueDisplayName } from "@/lib/leagues";
 
 export default async function HomePage({
   searchParams,
@@ -13,8 +16,9 @@ export default async function HomePage({
   const params = await searchParams;
   const activeLeague = isLeagueId(params.league) ? params.league : DEFAULT_LEAGUE;
 
-  const [matches, discussions] = await Promise.all([
-    fetchAllMatches(),
+  const [matches, standings, discussions] = await Promise.all([
+    fetchMatchesByLeague(activeLeague),
+    fetchStandings(activeLeague),
     fetchPopularDiscussions(),
   ]);
 
@@ -24,13 +28,16 @@ export default async function HomePage({
 
       <main className="flex gap-10 px-10 py-8">
         <div className="flex flex-1 flex-col gap-9">
-          {LEAGUES.map((league) => (
-            <LeagueMatchSection
-              key={league.id}
-              league={league}
-              matches={matches.filter((m) => m.league === league.id)}
-            />
-          ))}
+          <h1 className="text-xl font-bold text-ink">{leagueDisplayName(activeLeague)}</h1>
+
+          <UpcomingMatches matches={matches} />
+
+          <section>
+            <h2 className="text-lg font-bold text-ink">순위표</h2>
+            <StandingsTable rows={standings} />
+          </section>
+
+          <LeagueInfoCard standings={standings} matches={matches} />
         </div>
         <DiscussionSidebar discussions={discussions} />
       </main>

@@ -30,7 +30,7 @@ export function MainNavbar({
             const href =
               mode === "standings"
                 ? `/standings?league=${league.id}`
-                : `/?league=${league.id}#${league.slug}`;
+                : `/?league=${league.id}`;
             return (
               <Link key={league.id} href={href} className={underlineTabClass(active)}>
                 {league.nameKo}

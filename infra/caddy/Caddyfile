@@ -1,0 +1,7 @@
+# Caddy는 {$DOMAIN} 환경변수로 도메인을 받아 자동으로 Let's Encrypt 인증서를 발급/갱신한다.
+# 도메인이 아직 없다면 우선 서버의 공인 IP 또는 임시 도메인으로 :80만 사용하고,
+# 도메인 연결 후 이 파일을 갱신해 재기동한다 (docs/DEPLOY.md 참고).
+
+{$DOMAIN} {
+	reverse_proxy backend:8080
+}

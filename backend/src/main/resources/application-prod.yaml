@@ -1,0 +1,56 @@
+# 운영 프로파일. 모든 크리덴셜은 환경변수(.env / GitHub Secrets)로만 주입하며 이 파일에 실제 값을
+# 하드코딩하지 않는다. 필요한 환경변수 전체 목록은 .env.example 참고.
+spring:
+  datasource:
+    url: ${DB_URL}          # 예: jdbc:postgresql://postgres:5432/halfspace
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # 운영에서는 Flyway가 스키마를 소유한다. Hibernate는 검증만 수행하고 절대 스키마를 변경하지 않는다.
+      ddl-auto: validate
+    show-sql: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: email, profile
+          kakao:
+            client-id: ${KAKAO_CLIENT_ID}
+            client-secret: ${KAKAO_CLIENT_SECRET}
+            redirect-uri: "{baseUrl}/login/oauth2/code/kakao"
+            authorization-grant-type: authorization_code
+            scope: profile_nickname
+            client-authentication-method: client_secret_post
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+  batch:
+    jdbc:
+      # Flyway 베이스라인이 BATCH_* 테이블 DDL을 포함하므로 운영에서는 Spring Batch의 자동 스키마 생성을 끈다.
+      initialize-schema: never
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-version: 1
+    # baseline-on-migrate: true
+    # ^ 최초 운영 베이스라인 적용(V1__baseline.sql이 기존 스키마와 일치함을 확인한 1회성 부팅) 시에만
+    #   위 줄의 주석을 해제해서 사용하고, 정상 기동을 확인한 즉시 다시 주석 처리(=false)로 되돌릴 것.
+    #   자세한 절차는 backend/src/main/resources/db/migration/README.md 참고.

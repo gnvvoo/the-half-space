@@ -1,0 +1,104 @@
+# docker-compose.prod.yml — 운영(VPS) 배포용. 루트의 docker-compose.yml(dev용)과 별개로 관리한다.
+#
+# 사용법: docker compose -f docker-compose.prod.yml --env-file .env up -d
+#
+# 주의:
+#   - postgres/redis는 호스트 포트를 publish하지 않는다 (backend 컨테이너에서만 내부 네트워크로 접근)
+#   - backend 이미지는 GHCR에 push된 커밋 SHA 태그를 사용한다 (IMAGE_TAG(커밋 SHA)로 지정, latest 금지)
+#   - caddy가 80/443을 받아 backend로 리버스 프록시하고 Let's Encrypt 인증서를 자동 발급/갱신한다
+#   - prometheus/grafana는 Phase 5 준비용 최소 구성이며, 리소스 예산을 위해 mem_limit을 명시한다
+services:
+  backend:
+    image: ghcr.io/gnvvoo/the-half-space-backend:${IMAGE_TAG}
+    container_name: ths-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - postgres
+      - redis
+    mem_limit: 768m
+    networks:
+      - internal
+      - web
+
+  postgres:
+    image: postgres:16
+    container_name: ths-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    # 호스트 포트 publish 없음 — 내부 네트워크(internal)에서만 접근 가능
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    mem_limit: 512m
+    networks:
+      - internal
+
+  redis:
+    image: redis:7
+    container_name: ths-redis
+    restart: unless-stopped
+    # 호스트 포트 publish 없음
+    mem_limit: 128m
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ths-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+    mem_limit: 128m
+    networks:
+      - web
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ths-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    mem_limit: 256m
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ths-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    mem_limit: 256m
+    networks:
+      - internal
+      - web
+
+networks:
+  internal:
+  web:
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:
+  prometheus-data:
+  grafana-data:

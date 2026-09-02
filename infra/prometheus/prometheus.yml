@@ -1,0 +1,14 @@
+# Phase 5(관측) 준비용 최소 설정. Phase 5에서 backend에 Actuator+Micrometer가
+# 추가되면 scrape target을 backend:8080/actuator/prometheus로 채운다.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # - job_name: backend
+  #   metrics_path: /actuator/prometheus
+  #   static_configs:
+  #     - targets: ["backend:8080"]

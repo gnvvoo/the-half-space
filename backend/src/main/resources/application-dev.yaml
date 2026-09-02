@@ -1,0 +1,51 @@
+# 로컬 개발 프로파일 (기본 활성). docker-compose.yml(dev용)의 postgres/redis를 사용.
+#
+# 주의: 아래 admin/1245 크리덴셜은 로컬 전용 편의값이며 과거 커밋(application.yaml)에
+# 평문으로 노출되어 있었다. 로컬 DB 접근만을 위한 값이므로 운영 크리덴셜과 절대 동일하게
+# 두지 말 것 — 운영 크리덴셜은 이미 로테이션 대상이며 application-prod.yaml에서 환경변수로만 주입한다.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/halfspace
+    username: admin
+    password: 1245
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:}
+            client-secret: ${GOOGLE_CLIENT_SECRET:}
+            scope: email, profile
+          kakao:
+            client-id: ${KAKAO_CLIENT_ID:}
+            client-secret: ${KAKAO_CLIENT_SECRET:}
+            redirect-uri: "{baseUrl}/login/oauth2/code/kakao"
+            authorization-grant-type: authorization_code
+            scope: profile_nickname
+            client-authentication-method: client_secret_post
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+  batch:
+    jdbc:
+      initialize-schema: always
+
+  # 마이그레이션이 아직 없으므로 dev에서는 Flyway를 비활성화하고 Hibernate ddl-auto: update로 스키마를 관리한다.
+  flyway:
+    enabled: false

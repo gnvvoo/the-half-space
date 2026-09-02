@@ -11,6 +11,8 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     List<Match> findByCompetitionIdAndUtcDateBetweenOrderByUtcDate(
             String competitionId, Instant from, Instant to);
 
+    List<Match> findByUtcDateBetweenOrderByUtcDate(Instant from, Instant to);
+
     List<Match> findByCompetitionIdAndSeasonOrderByMatchDayAscUtcDateAsc(
             String competitionId, String season);
 

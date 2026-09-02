@@ -1,7 +1,9 @@
 package com.thehalfspace.controller;
 
 import com.thehalfspace.dto.ApiResponse;
+import com.thehalfspace.dto.MatchDiscussionResponse;
 import com.thehalfspace.dto.MatchResponse;
+import com.thehalfspace.service.CommentService;
 import com.thehalfspace.service.MatchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -16,6 +18,12 @@ import java.util.List;
 public class MatchController {
 
     private final MatchService matchService;
+    private final CommentService commentService;
+
+    @GetMapping("/matches/today/discussions")
+    public ApiResponse<List<MatchDiscussionResponse>> getTodayDiscussions() {
+        return ApiResponse.of(commentService.getTodayDiscussions());
+    }
 
     @GetMapping("/matches")
     public ApiResponse<List<MatchResponse>> getMatches(

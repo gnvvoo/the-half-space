@@ -7,6 +7,7 @@ import com.thehalfspace.security.JwtAuthFilter;
 import com.thehalfspace.security.OAuth2SuccessHandler;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
@@ -34,6 +35,9 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final ObjectMapper objectMapper;
+
+    @Value("${app.cors.allowed-origins:http://localhost:3000}")
+    private String allowedOrigins;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -70,7 +74,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedOrigins(List.of(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

@@ -54,3 +54,8 @@ spring:
     # ^ 최초 운영 베이스라인 적용(V1__baseline.sql이 기존 스키마와 일치함을 확인한 1회성 부팅) 시에만
     #   위 줄의 주석을 해제해서 사용하고, 정상 기동을 확인한 즉시 다시 주석 처리(=false)로 되돌릴 것.
     #   자세한 절차는 backend/src/main/resources/db/migration/README.md 참고.
+
+# CORS (Vercel 도메인으로 교체)
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}

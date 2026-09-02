@@ -1,8 +1,14 @@
 name: backend-ci-cd
 
+# 브랜치 전략: feat/* → develop (test만) → main (test + build + 운영 배포)
 on:
   push:
-    branches: [develop]
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [develop, main]
     paths:
       - 'backend/**'
       - '.github/workflows/backend.yml'
@@ -73,6 +79,8 @@ jobs:
   build-and-push:
     name: Build & Push Image
     needs: test
+    # 운영 이미지는 main 브랜치에서만 생성·배포
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.tag }}

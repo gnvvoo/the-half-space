@@ -19,6 +19,11 @@ public enum ErrorCode {
     // Standing
     STANDING_NOT_FOUND(HttpStatus.NOT_FOUND, "순위 정보를 찾을 수 없습니다"),
 
+    // Comment
+    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다"),
+    COMMENT_FORBIDDEN(HttpStatus.FORBIDDEN, "본인이 작성한 댓글만 삭제할 수 있습니다"),
+    INVALID_PARENT_COMMENT(HttpStatus.BAD_REQUEST, "대댓글에는 답글을 달 수 없습니다"),
+
     // Auth
     AUTHENTICATION_REQUIRED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다"),

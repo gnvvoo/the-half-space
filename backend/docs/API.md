@@ -42,6 +42,9 @@ Base URL: `/api/v1`
 | `REVIEW_NOT_READY` | 404 | AI 리뷰가 아직 생성되지 않았습니다 |
 | `AGENT_EXECUTION_FAILED` | 503 | AI 에이전트 실행에 실패했습니다 |
 | `AGENT_ALREADY_RUNNING` | 409 | 이미 실행 중인 AI 에이전트가 있습니다 |
+| `COMMENT_NOT_FOUND` | 404 | 댓글을 찾을 수 없습니다 |
+| `COMMENT_FORBIDDEN` | 403 | 본인이 작성한 댓글만 삭제할 수 있습니다 |
+| `INVALID_PARENT_COMMENT` | 400 | 대댓글에는 답글을 달 수 없습니다 |
 
 ### 인증
 
@@ -319,11 +322,113 @@ Google/Kakao 로그인은 Spring Security OAuth2 플로우로 처리되며 별�
 
 ---
 
+## Comment (경기 토론)
+
+`Comment`는 `matchId`·`postId` 두 nullable 컬럼 중 정확히 하나만 채워 경기 토론과
+(Phase 4 예정) 게시판 댓글을 함께 담는다. 별도 스레드 테이블 없이 첫 댓글이 곧 해당
+경기의 토론 시작이다(lazy thread). 대댓글은 1단계까지만 허용한다.
+
+### 경기 댓글 목록 조회
+
+`GET /api/v1/matches/{matchId}/comments` — 인증 불필요
+
+**Query Parameters**: `page`, `size`, `sort` (Spring `Pageable` 표준 파라미터)
+
+최상위 댓글만 페이지네이션하고, 각 댓글의 대댓글은 `replies` 배열에 함께 담아 반환한다.
+
+**Response** `200 OK` — `Page<CommentResponse>`
+
+```json
+{
+  "data": {
+    "content": [
+      {
+        "id": 1,
+        "matchId": 10,
+        "postId": null,
+        "parentId": null,
+        "authorId": 5,
+        "authorNickname": "축구팬",
+        "content": "오늘 라인업 어떻게 보세요?",
+        "deleted": false,
+        "createdAt": "2026-09-02T10:00:00Z",
+        "replies": [
+          {
+            "id": 2,
+            "matchId": 10,
+            "postId": null,
+            "parentId": 1,
+            "authorId": 6,
+            "authorNickname": "감독",
+            "content": "선발이 무난해 보여요",
+            "deleted": false,
+            "createdAt": "2026-09-02T10:05:00Z",
+            "replies": []
+          }
+        ]
+      }
+    ],
+    "totalElements": 1
+  },
+  "timestamp": "2026-09-02T10:10:00Z"
+}
+```
+
+에러: `MATCH_NOT_FOUND`(경기 자체가 없어도 빈 목록을 반환하며 별도 에러는 없음)
+
+### 경기 댓글 작성
+
+`POST /api/v1/matches/{matchId}/comments` — 인증 필요
+
+**Request Body**
+
+| Field | Type | 제약 |
+|---|---|---|
+| content | string | 필수, 최대 1000자 |
+| parentId | number | 선택, 대댓글 작성 시 부모 댓글 id |
+
+**Response** `201 Created` — `CommentResponse`
+
+에러: `MATCH_NOT_FOUND`, `COMMENT_NOT_FOUND`(존재하지 않는 parentId), `INVALID_PARENT_COMMENT`(대댓글에 답글 시도), `INVALID_INPUT`
+
+### 댓글 삭제 (soft delete)
+
+`DELETE /api/v1/comments/{id}` — 인증 필요, 작성자 본인만 가능
+
+삭제된 댓글은 `deleted: true`로 표시되며 `content`·`authorNickname`은 `null`로 마스킹되어 반환된다(레코드는 물리적으로 삭제하지 않음).
+
+**Response** `200 OK`
+
+에러: `COMMENT_NOT_FOUND`, `COMMENT_FORBIDDEN`(본인 댓글이 아님)
+
+### 오늘의 토론장
+
+`GET /api/v1/matches/today/discussions` — 인증 불필요
+
+UTC 기준 오늘 예정/진행/종료된 전 리그 경기 목록에 댓글 수를 붙여 반환한다. 프론트 홈 화면에서
+경기일을 부각시키는 데 사용한다.
+
+**Response** `200 OK` — `MatchDiscussionResponse[]`
+
+```json
+{
+  "data": [
+    {
+      "match": { "id": 10, "competitionId": "PL", "...": "MatchResponse 동일 구조" },
+      "commentCount": 4
+    }
+  ],
+  "timestamp": "2026-09-02T00:00:00Z"
+}
+```
+
+---
+
 ## 미구현 API (설계 예정)
 
 CLAUDE.md 기준 다음 도메인은 아직 컨트롤러가 존재하지 않는다:
 
 - `GET/POST /api/v1/teams/**` — 팀 정보
 - `GET /api/v1/leaderboard` — 예측 리더보드
-- `GET/POST /api/v1/posts/**` — 게시판(Post/Comment)
+- `GET/POST /api/v1/posts/**` — 게시판(Post). 댓글은 위 Comment 섹션의 `postId` 컬럼을 그대로 재사용할 예정(스키마 변경 없음)
 - 승부 예측(Prediction) 관련 API

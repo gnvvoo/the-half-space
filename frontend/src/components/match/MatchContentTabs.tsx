@@ -5,7 +5,7 @@ import { ArticleView } from "./ArticleView";
 import { CommentThread } from "./CommentThread";
 import type { Comment, Match } from "@/lib/types";
 import { underlineTabClass } from "@/lib/utils";
-import { countComments } from "@/lib/data/comments";
+import { countComments } from "@/lib/api/comments";
 
 type TabKey = "preview" | "review" | "discussion";
 
@@ -58,7 +58,9 @@ export function MatchContentTabs({
             quote={match.aiReviewQuote}
           />
         )}
-        {tab === "discussion" && <CommentThread initialComments={comments} />}
+        {tab === "discussion" && (
+          <CommentThread comments={comments} target={{ type: "match", id: match.id }} />
+        )}
       </div>
     </div>
   );

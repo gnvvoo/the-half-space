@@ -46,3 +46,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   return (body as ApiSuccess<T>).data;
 }
+
+/** `Authorization: Bearer {token}` 헤더. 토큰이 없으면 빈 객체를 반환한다. */
+export function authHeaders(token: string | null | undefined): HeadersInit {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}

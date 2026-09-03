@@ -64,20 +64,59 @@ export interface Match {
   aiReviewQuote?: string;
 }
 
-export interface Discussion {
+export interface Comment {
   id: string;
-  title: string;
-  likes: number;
+  matchId: string | null;
+  postId: string | null;
+  parentId: string | null;
+  authorId: string | null;
+  authorNickname: string | null;
+  content: string | null;
+  deleted: boolean;
+  createdAt: string;
+  replies: Comment[];
+}
+
+/** Spring `Page<T>` — only the fields the frontend consumes. */
+export interface Page<T> {
+  content: T[];
+  totalElements: number;
+}
+
+/** "오늘의 토론장": 오늘의 경기 + 댓글 수. */
+export interface MatchDiscussion {
+  match: Match;
   commentCount: number;
 }
 
-export interface Comment {
+export type BoardCode =
+  | "epl"
+  | "laliga"
+  | "bundesliga"
+  | "seriea"
+  | "ligue1"
+  | "free"
+  | "transfer";
+
+export interface Board {
   id: string;
-  author: string;
+  code: BoardCode;
+  name: string;
+  description: string;
+}
+
+export interface Post {
+  id: string;
+  boardId: string;
+  boardCode: BoardCode;
+  authorId: string | null;
+  authorNickname: string | null;
+  title: string;
   content: string;
-  likes: number;
+  viewCount: number;
+  deleted: boolean;
   createdAt: string;
-  replies: Comment[];
+  updatedAt: string | null;
 }
 
 export interface StandingRow {

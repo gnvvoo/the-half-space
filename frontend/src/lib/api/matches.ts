@@ -3,7 +3,7 @@ import { LEAGUES, competitionCode, leagueFromCompetition } from "../leagues";
 import { apiFetch, ApiRequestError } from "./http";
 import { mapTeam, type TeamResponseDto } from "./mappers";
 
-interface MatchResponseDto {
+export interface MatchResponseDto {
   id: number;
   competitionId: string;
   season: string;
@@ -69,7 +69,7 @@ function withContentPlaceholders(match: CoreMatchFields): Match {
   };
 }
 
-function mapMatch(raw: MatchResponseDto): Match {
+export function mapMatch(raw: MatchResponseDto): Match {
   const league = leagueFromCompetition(raw.competitionId);
   const status = mapStatus(raw.status);
   return withContentPlaceholders({

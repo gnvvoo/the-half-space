@@ -6,7 +6,7 @@ import { MatchContentTabs } from "@/components/match/MatchContentTabs";
 import { MatchSidebar } from "@/components/match/MatchSidebar";
 import { fetchMatchById } from "@/lib/api/matches";
 import { fetchStandings } from "@/lib/api/standings";
-import { fetchCommentsForMatch } from "@/lib/api/discussions";
+import { fetchMatchComments } from "@/lib/api/comments";
 
 export default async function MatchDetailPage({
   params,
@@ -17,10 +17,11 @@ export default async function MatchDetailPage({
   const match = await fetchMatchById(id);
   if (!match) notFound();
 
-  const [standings, comments] = await Promise.all([
+  const [standings, commentPage] = await Promise.all([
     fetchStandings(match.league),
-    fetchCommentsForMatch(match.id),
+    fetchMatchComments(match.id),
   ]);
+  const comments = commentPage.content;
 
   return (
     <div className="mx-auto min-h-screen max-w-[1280px] bg-background">

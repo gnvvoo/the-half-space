@@ -1,0 +1,14 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: discord
+    receivers:
+      - uid: discord-webhook
+        type: discord
+        settings:
+          # docker-compose.prod.yml에서 grafana 컨테이너에 DISCORD_WEBHOOK_URL 환경변수를 주입하면
+          # Grafana가 provisioning 파일 로드 시 $DISCORD_WEBHOOK_URL을 치환한다.
+          # 값이 비어 있으면 이 contact point는 비활성 상태로 취급되며, 채워질 때까지 알림 발송은 실패한다.
+          url: $DISCORD_WEBHOOK_URL
+        disableResolveMessage: false

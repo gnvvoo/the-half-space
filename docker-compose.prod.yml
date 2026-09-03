@@ -74,6 +74,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
       - prometheus-data:/prometheus
     mem_limit: 256m
     networks:
@@ -85,12 +86,28 @@ services:
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
     mem_limit: 256m
     networks:
       - internal
       - web
+
+  # node-exporter: 호스트 디스크/CPU/메모리 지표 노출 (경량, cadvisor는 리소스 예산상 제외 — 필요 시
+  # docs/DEPLOY.md 관측 섹션 참고해 추가 검토)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: ths-node-exporter
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 64m
+    networks:
+      - internal
 
 networks:
   internal:

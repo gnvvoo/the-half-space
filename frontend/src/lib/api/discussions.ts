@@ -1,13 +1,16 @@
-import type { Comment, Discussion } from "../types";
-import { POPULAR_DISCUSSIONS } from "../data/discussions";
-import { getCommentsForMatch } from "../data/comments";
+import type { MatchDiscussion } from "../types";
+import { apiFetch } from "./http";
+import { mapMatch, type MatchResponseDto } from "./matches";
 
-// GET /discussions/popular
-export async function fetchPopularDiscussions(): Promise<Discussion[]> {
-  return POPULAR_DISCUSSIONS;
+interface MatchDiscussionResponseDto {
+  match: MatchResponseDto;
+  commentCount: number;
 }
 
-// GET /matches/{id}/comments
-export async function fetchCommentsForMatch(matchId: string): Promise<Comment[]> {
-  return getCommentsForMatch(matchId);
+// GET /matches/today/discussions
+export async function fetchTodayDiscussions(): Promise<MatchDiscussion[]> {
+  const rows = await apiFetch<MatchDiscussionResponseDto[]>("/matches/today/discussions", {
+    next: { revalidate: 60 },
+  });
+  return rows.map((row) => ({ match: mapMatch(row.match), commentCount: row.commentCount }));
 }

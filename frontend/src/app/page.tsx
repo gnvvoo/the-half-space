@@ -5,7 +5,7 @@ import { DiscussionSidebar } from "@/components/home/DiscussionSidebar";
 import { StandingsTable } from "@/components/standings/StandingsTable";
 import { fetchMatchesByLeague } from "@/lib/api/matches";
 import { fetchStandings } from "@/lib/api/standings";
-import { fetchPopularDiscussions } from "@/lib/api/discussions";
+import { fetchTodayDiscussions } from "@/lib/api/discussions";
 import { DEFAULT_LEAGUE, isLeagueId, leagueDisplayName } from "@/lib/leagues";
 
 export default async function HomePage({
@@ -19,7 +19,7 @@ export default async function HomePage({
   const [matches, standings, discussions] = await Promise.all([
     fetchMatchesByLeague(activeLeague),
     fetchStandings(activeLeague),
-    fetchPopularDiscussions(),
+    fetchTodayDiscussions(),
   ]);
 
   return (

@@ -3,5 +3,17 @@
 # 도메인 연결 후 이 파일을 갱신해 재기동한다 (docs/DEPLOY.md 참고).
 
 {$DOMAIN} {
-	reverse_proxy backend:8080
+	# /actuator/prometheus는 내부 Docker 네트워크(prometheus 컨테이너)에서만 스크레이프한다.
+	# 외부에는 절대 노출하지 않는다 — health만 공개로 둔다.
+	@actuatorPublic path /actuator/health /actuator/health/*
+	@actuatorPrivate path /actuator/*
+	handle @actuatorPublic {
+		reverse_proxy backend:8080
+	}
+	handle @actuatorPrivate {
+		respond 404
+	}
+	handle {
+		reverse_proxy backend:8080
+	}
 }

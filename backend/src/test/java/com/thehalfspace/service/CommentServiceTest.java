@@ -2,8 +2,10 @@ package com.thehalfspace.service;
 
 import com.thehalfspace.dto.CommentRequest;
 import com.thehalfspace.dto.CommentResponse;
+import com.thehalfspace.entity.Board;
 import com.thehalfspace.entity.Comment;
 import com.thehalfspace.entity.Match;
+import com.thehalfspace.entity.Post;
 import com.thehalfspace.entity.User;
 import com.thehalfspace.exception.BusinessException;
 import com.thehalfspace.exception.NotFoundException;
@@ -133,6 +135,65 @@ class CommentServiceTest {
 
         assertThatThrownBy(() -> commentService.deleteComment(100L, 10L))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    private Post postWithId(Long id) {
+        Board board = Board.of("epl", "프리미어리그", "설명");
+        ReflectionTestUtils.setField(board, "id", 1L);
+        User author = userWithId(1L);
+        Post post = Post.of(board, author, "제목", "내용");
+        ReflectionTestUtils.setField(post, "id", id);
+        return post;
+    }
+
+    @Test
+    void createPostComment_정상_생성() {
+        Post post = postWithId(1L);
+        User author = userWithId(10L);
+
+        when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(author));
+        when(commentRepository.save(any())).thenAnswer(inv -> {
+            Comment c = inv.getArgument(0);
+            ReflectionTestUtils.setField(c, "id", 100L);
+            return c;
+        });
+
+        CommentResponse response = commentService.createPostComment(1L, 10L, new CommentRequest("좋은 글이네요", null));
+
+        assertThat(response.postId()).isEqualTo(1L);
+        assertThat(response.content()).isEqualTo("좋은 글이네요");
+        assertThat(response.authorId()).isEqualTo(10L);
+    }
+
+    @Test
+    void createPostComment_게시글이_없으면_NotFoundException() {
+        when(postRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> commentService.createPostComment(1L, 10L, new CommentRequest("내용", null)))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void getPostComments_대댓글을_부모에_묶어서_반환한다() {
+        Post post = postWithId(1L);
+        User author = userWithId(10L);
+        Comment root = Comment.ofPost(post, author, null, "루트 댓글");
+        ReflectionTestUtils.setField(root, "id", 1L);
+        Comment reply = Comment.ofPost(post, author, root, "답글");
+        ReflectionTestUtils.setField(reply, "id", 2L);
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(commentRepository.findByPostIdAndParentIsNullOrderByCreatedAtAsc(1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(root), pageable, 1));
+        when(commentRepository.findByParentIdInOrderByCreatedAtAsc(List.of(1L)))
+                .thenReturn(List.of(reply));
+
+        Page<CommentResponse> result = commentService.getPostComments(1L, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).replies()).hasSize(1);
+        assertThat(result.getContent().get(0).replies().get(0).id()).isEqualTo(2L);
     }
 
     @Test

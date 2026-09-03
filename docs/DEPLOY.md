@@ -116,6 +116,73 @@ gunzip -c /backups/halfspace-<date>.sql.gz | docker exec -i ths-postgres psql -U
 - 스케줄러(football-cli 기반 배치)가 다음날 경기 데이터를 자동 갱신하는지 24시간 관찰
   (`docker compose -f docker-compose.prod.yml logs backend`에서 배치 실행 로그 확인)
 
+## 9. 관측(Observability) — Prometheus + Grafana
+
+Phase 5부터 backend가 Actuator(`/actuator/health`, `/actuator/prometheus`)로 지표를 노출하고,
+prometheus/grafana 컨테이너가 이를 수집·시각화·알림한다.
+
+- backend의 `/actuator/prometheus`는 Caddy에서 외부에 프록시되지 않는다
+  (`infra/caddy/Caddyfile`에서 `/actuator/*`는 `/actuator/health`, `/actuator/health/*`를 제외하고
+  404 처리). prometheus 컨테이너는 `internal` 네트워크에서 `backend:8080`으로 직접 접근한다.
+- `node-exporter` 컨테이너가 호스트 디스크/CPU 지표를 노출한다 (mem_limit 64m, cadvisor는 리소스
+  예산상 제외 — 컨테이너별 지표가 필요해지면 추가 검토).
+
+### Grafana 첫 로그인 [USER ACTION]
+
+1. `https://<도메인>` 대신 서버 내부에서만 접근 가능하므로(현재 grafana는 `internal`+`web` 네트워크에
+   있지만 Caddy가 grafana를 프록시하지 않음), SSH 터널로 접근한다:
+   ```bash
+   ssh -L 3001:localhost:3001 <user>@<vps-ip>
+   # VPS에서: docker port ths-grafana 3000  (또는 compose에 포트 매핑 추가 후 재기동)
+   ```
+   또는 필요 시 `docker-compose.prod.yml`의 grafana 서비스에 임시로 `ports: ["127.0.0.1:3001:3000"]`을
+   추가해 로컬 포트로만 열어 SSH 터널 없이 접근할 수도 있다 (외부에 직접 노출하지 말 것).
+2. 최초 로그인: `admin` / `.env`의 `GRAFANA_ADMIN_PASSWORD`
+3. 로그인 후 비밀번호 변경 안내가 뜨면 진행할지는 운영자 판단(환경변수로 이미 관리 중이므로 스킵 가능)
+
+### 대시보드 위치
+
+- `infra/grafana/provisioning/dashboards/json/halfspace-jvm-http.json` — JVM 힙, HTTP 요청률/p95
+  지연시간, 배치 잡 실행 현황, CPU 사용량을 보여주는 최소 대시보드. Grafana 기동 시 자동
+  프로비저닝된다(코드로 관리, UI에서 수정한 내용은 재기동 시 덮어써질 수 있음 — 영구 변경은 이
+  JSON 파일을 직접 수정할 것).
+- 더 상세한 표준 대시보드가 필요하면 Grafana 공식 "JVM (Micrometer)" 대시보드(ID: 4701) 또는
+  "Spring Boot Statistics"(ID: 12900)를 Grafana UI에서 Import해서 병행 사용할 수 있다.
+- football-data API 호출 수(무료 티어 10 req/min 한도 감시)는 별도 커스텀 메트릭이 아직 없으므로
+  이 대시보드에 포함되지 않았다 — 배치/agent 코드에 Micrometer 카운터를 추가하는 후속 작업 필요.
+
+### Discord 알림 웹훅 설정 [USER ACTION]
+
+1. Discord 채널 설정 → 연동 → 웹훅 만들기 → URL 복사
+2. `.env`의 `DISCORD_WEBHOOK_URL`에 붙여넣기 후 grafana 컨테이너 재기동:
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d grafana
+   ```
+3. Grafana Alerting → Contact points에서 `discord` 항목이 정상 상태인지 확인 (Test 버튼으로 발송 테스트)
+
+### 구성된 알림 규칙
+
+`infra/grafana/provisioning/alerting/rules.yml`에 정의됨 (Grafana Alerting이 Prometheus 데이터소스를
+직접 쿼리; Alertmanager는 별도 도입하지 않음):
+
+- **Backend Down**: `up{job="backend"} == 0`이 2분 지속 시 critical
+- **High 5xx Rate**: 5분간 5xx 응답 비율이 5% 초과 시 warning
+- **Disk Usage Above 80%**: 루트 파티션 사용량 80% 초과가 5분 지속 시 warning (node-exporter 필요)
+
+세 규칙 모두 `discord` contact point로 알림이 전송된다. `infra/prometheus/alert-rules.yml`에는
+동일 조건의 Prometheus 룰 파일도 참고용으로 함께 두었다(Alertmanager 미도입으로 실제 발송 경로는
+Grafana Alerting 하나뿐).
+
+### 검증 절차 (의도적 장애 유발)
+
+- **backend 다운 알림 확인**: `docker compose -f docker-compose.prod.yml stop backend` 후 2분 대기,
+  Discord 채널에 알림 도착 확인. 확인 후 `docker compose -f docker-compose.prod.yml start backend`로 복구.
+- **배치 실패 알림**: 현재 배치 잡 실패를 감지하는 전용 알림 규칙은 없음(위 "대시보드 위치" 참고 —
+  커스텀 메트릭 후속 작업 필요). 우선은 `docker compose -f docker-compose.prod.yml logs backend`에서
+  배치 실행 로그를 육안 확인하는 것으로 대체.
+- **디스크 80% 알림**: 실제로 디스크를 채우는 테스트는 위험하므로, Grafana Alerting UI에서 규칙의
+  "Test rule"로 쿼리 결과만 확인하는 것으로 대체 권장.
+
 ## 참고: football-agent 바이너리 미결 사항
 
 `backend/Dockerfile`에 TODO로 남겨둔 대로, `app.agent.binary-path`가 가리키는 `football-agent`

@@ -45,6 +45,9 @@ Base URL: `/api/v1`
 | `COMMENT_NOT_FOUND` | 404 | 댓글을 찾을 수 없습니다 |
 | `COMMENT_FORBIDDEN` | 403 | 본인이 작성한 댓글만 삭제할 수 있습니다 |
 | `INVALID_PARENT_COMMENT` | 400 | 대댓글에는 답글을 달 수 없습니다 |
+| `BOARD_NOT_FOUND` | 404 | 게시판을 찾을 수 없습니다 |
+| `POST_NOT_FOUND` | 404 | 게시글을 찾을 수 없습니다 |
+| `POST_FORBIDDEN` | 403 | 본인이 작성한 게시글만 수정·삭제할 수 있습니다 |
 
 ### 인증
 
@@ -324,9 +327,10 @@ Google/Kakao 로그인은 Spring Security OAuth2 플로우로 처리되며 별�
 
 ## Comment (경기 토론)
 
-`Comment`는 `matchId`·`postId` 두 nullable 컬럼 중 정확히 하나만 채워 경기 토론과
-(Phase 4 예정) 게시판 댓글을 함께 담는다. 별도 스레드 테이블 없이 첫 댓글이 곧 해당
-경기의 토론 시작이다(lazy thread). 대댓글은 1단계까지만 허용한다.
+`Comment`는 `matchId`·`postId` 두 nullable FK 컬럼 중 정확히 하나만 채워 경기 토론과
+게시판(Post) 댓글을 함께 담는다. 별도 스레드 테이블 없이 첫 댓글이 곧 해당 경기의 토론
+시작이다(lazy thread). 대댓글은 1단계까지만 허용한다. 게시글 댓글 API는 아래
+"커뮤니티 게시판" 섹션 참고.
 
 ### 경기 댓글 목록 조회
 
@@ -424,11 +428,137 @@ UTC 기준 오늘 예정/진행/종료된 전 리그 경기 목록에 댓글 수
 
 ---
 
+## 커뮤니티 게시판 (Board / Post)
+
+`Board`는 7개(epl, laliga, bundesliga, seriea, ligue1, free, transfer)를 앱 기동 시
+`BoardSeeder`(`CommandLineRunner`)가 code 존재 여부를 확인해 idempotent하게 시딩한다.
+`Post`는 게시판별 글이며 soft delete·조회수를 지원한다. 게시글 댓글은 위 Comment 섹션의
+`Comment` 엔티티를 postId FK로 재사용한다(1단계 대댓글, 작성자 본인만 soft delete 가능 — 동일 정책).
+
+### 게시판 목록 조회
+
+`GET /api/v1/boards` — 인증 불필요
+
+**Response** `200 OK` — `BoardResponse[]`
+
+```json
+{
+  "data": [
+    { "id": 1, "code": "epl", "name": "프리미어리그", "description": "잉글랜드 프리미어리그 게시판" }
+  ],
+  "timestamp": "2026-09-03T00:00:00Z"
+}
+```
+
+### 게시판별 글 목록 조회
+
+`GET /api/v1/boards/{boardId}/posts` — 인증 불필요
+
+**Query Parameters**
+
+| Param | Type | 필수 | 설명 |
+|---|---|---|---|
+| title | string | N | 제목 부분 검색(대소문자 무시) |
+| page, size, sort | - | N | Spring `Pageable` 표준 파라미터 |
+
+soft delete된 글은 목록에서 제외된다. 정렬은 최신순 고정(`createdAt desc`).
+
+**Response** `200 OK` — `Page<PostResponse>`
+
+```json
+{
+  "data": {
+    "content": [
+      {
+        "id": 1,
+        "boardId": 1,
+        "boardCode": "epl",
+        "authorId": 5,
+        "authorNickname": "축구팬",
+        "title": "이번 시즌 우승은?",
+        "content": "본문",
+        "viewCount": 12,
+        "deleted": false,
+        "createdAt": "2026-09-02T10:00:00Z",
+        "updatedAt": null
+      }
+    ],
+    "totalElements": 1
+  },
+  "timestamp": "2026-09-03T00:00:00Z"
+}
+```
+
+### 게시글 작성
+
+`POST /api/v1/boards/{boardId}/posts` — 인증 필요
+
+**Request Body**
+
+| Field | Type | 제약 |
+|---|---|---|
+| title | string | 필수, 최대 200자 |
+| content | string | 필수, 최대 5000자 |
+
+**Response** `201 Created` — `PostResponse`
+
+에러: `BOARD_NOT_FOUND`, `INVALID_INPUT`
+
+### 게시글 상세 조회
+
+`GET /api/v1/posts/{id}` — 인증 불필요
+
+조회할 때마다 `viewCount`가 1 증가한다. soft delete된 글은 `POST_NOT_FOUND`.
+
+**Response** `200 OK` — `PostResponse`
+
+에러: `POST_NOT_FOUND`
+
+### 게시글 수정
+
+`PUT /api/v1/posts/{id}` — 인증 필요, 작성자 본인만 가능
+
+**Request Body**: 작성과 동일(`title`, `content`)
+
+**Response** `200 OK` — `PostResponse`
+
+에러: `POST_NOT_FOUND`, `POST_FORBIDDEN`, `INVALID_INPUT`
+
+### 게시글 삭제 (soft delete)
+
+`DELETE /api/v1/posts/{id}` — 인증 필요, 작성자 본인만 가능
+
+**Response** `200 OK`
+
+에러: `POST_NOT_FOUND`, `POST_FORBIDDEN`
+
+### 게시글 댓글 목록 조회
+
+`GET /api/v1/posts/{postId}/comments` — 인증 불필요
+
+Match 댓글과 동일하게 최상위 댓글만 페이지네이션하고 대댓글은 `replies`에 담긴다.
+응답 구조는 위 Comment 섹션의 `CommentResponse`와 동일(`matchId: null`, `postId`가 채워짐).
+
+**Response** `200 OK` — `Page<CommentResponse>`
+
+### 게시글 댓글 작성
+
+`POST /api/v1/posts/{postId}/comments` — 인증 필요
+
+**Request Body**: Match 댓글과 동일(`content`, `parentId`)
+
+**Response** `201 Created` — `CommentResponse`
+
+에러: `POST_NOT_FOUND`, `COMMENT_NOT_FOUND`(존재하지 않는 parentId), `INVALID_PARENT_COMMENT`, `INVALID_INPUT`
+
+댓글 삭제는 Comment 섹션의 `DELETE /api/v1/comments/{id}`를 공용으로 사용한다.
+
+---
+
 ## 미구현 API (설계 예정)
 
 CLAUDE.md 기준 다음 도메인은 아직 컨트롤러가 존재하지 않는다:
 
 - `GET/POST /api/v1/teams/**` — 팀 정보
 - `GET /api/v1/leaderboard` — 예측 리더보드
-- `GET/POST /api/v1/posts/**` — 게시판(Post). 댓글은 위 Comment 섹션의 `postId` 컬럼을 그대로 재사용할 예정(스키마 변경 없음)
 - 승부 예측(Prediction) 관련 API

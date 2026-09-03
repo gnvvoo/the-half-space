@@ -45,6 +45,9 @@ export function MainNavbar({
               홈
             </Link>
           )}
+          <Link href="/boards" className="text-sm font-medium text-ink/70 hover:text-ink">
+            게시판
+          </Link>
         </nav>
 
         {isAuthenticated ? (

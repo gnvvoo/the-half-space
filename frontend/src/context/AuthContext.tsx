@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import type { User } from "@/lib/types";
-import { login as apiLogin, signup as apiSignup } from "@/lib/api/auth";
+import { login as apiLogin, signup as apiSignup, decodeAccessToken } from "@/lib/api/auth";
 import type { LoginPayload, SignupPayload } from "@/lib/api/auth";
 import { fetchCurrentUser } from "@/lib/api/user";
 
@@ -80,24 +80,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (payload: LoginPayload) => {
-      const user = await apiLogin(payload);
-      persist({ user, accessToken: null, refreshToken: null });
+      const { user, tokens } = await apiLogin(payload);
+      persist({ user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
     },
     [persist]
   );
 
   const signup = useCallback(
     async (payload: SignupPayload) => {
-      const user = await apiSignup(payload);
-      persist({ user, accessToken: null, refreshToken: null });
+      const { user, tokens } = await apiSignup(payload);
+      persist({ user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
     },
     [persist]
   );
 
   const loginWithTokens = useCallback(
     async (accessToken: string, refreshToken: string) => {
-      // 백엔드에 GET /users/me가 아직 없어 프로필은 mock으로 채운다.
-      const user = await fetchCurrentUser();
+      // 백엔드에 GET /users/me가 아직 없어 닉네임 등 프로필은 mock으로 채우되,
+      // 작성자 판별에 쓰이는 id/email은 토큰 클레임에서 읽어 실제 값으로 맞춘다.
+      const mockUser = await fetchCurrentUser();
+      const claims = decodeAccessToken(accessToken);
+      const user: User = { ...mockUser, id: String(claims.userId), email: claims.email };
       persist({ user, accessToken, refreshToken });
     },
     [persist]

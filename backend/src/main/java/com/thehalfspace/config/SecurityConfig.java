@@ -51,6 +51,7 @@ public class SecurityConfig {
                         .requestMatchers("GET", "/api/v1/standings").permitAll()
                         .requestMatchers("GET", "/api/v1/teams/**").permitAll()
                         .requestMatchers("GET", "/api/v1/leaderboard").permitAll()
+                        .requestMatchers("GET", "/api/v1/boards/**").permitAll()
                         .requestMatchers("GET", "/api/v1/posts/**").permitAll()
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
                         .anyRequest().authenticated()

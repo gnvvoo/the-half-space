@@ -24,7 +24,7 @@ public record CommentResponse(
         return new CommentResponse(
                 comment.getId(),
                 comment.getMatch() != null ? comment.getMatch().getId() : null,
-                comment.getPostId(),
+                comment.getPost() != null ? comment.getPost().getId() : null,
                 comment.getParent() != null ? comment.getParent().getId() : null,
                 comment.getAuthor().getId(),
                 comment.isDeleted() ? null : comment.getAuthor().getNickname(),

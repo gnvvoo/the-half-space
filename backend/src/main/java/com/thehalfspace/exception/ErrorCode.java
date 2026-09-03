@@ -24,6 +24,11 @@ public enum ErrorCode {
     COMMENT_FORBIDDEN(HttpStatus.FORBIDDEN, "본인이 작성한 댓글만 삭제할 수 있습니다"),
     INVALID_PARENT_COMMENT(HttpStatus.BAD_REQUEST, "대댓글에는 답글을 달 수 없습니다"),
 
+    // Board / Post
+    BOARD_NOT_FOUND(HttpStatus.NOT_FOUND, "게시판을 찾을 수 없습니다"),
+    POST_NOT_FOUND(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다"),
+    POST_FORBIDDEN(HttpStatus.FORBIDDEN, "본인이 작성한 게시글만 수정·삭제할 수 있습니다"),
+
     // Auth
     AUTHENTICATION_REQUIRED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다"),

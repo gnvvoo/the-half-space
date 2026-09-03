@@ -5,12 +5,14 @@ import com.thehalfspace.dto.CommentResponse;
 import com.thehalfspace.dto.MatchDiscussionResponse;
 import com.thehalfspace.entity.Comment;
 import com.thehalfspace.entity.Match;
+import com.thehalfspace.entity.Post;
 import com.thehalfspace.entity.User;
 import com.thehalfspace.exception.BusinessException;
 import com.thehalfspace.exception.ErrorCode;
 import com.thehalfspace.exception.NotFoundException;
 import com.thehalfspace.repository.CommentRepository;
 import com.thehalfspace.repository.MatchRepository;
+import com.thehalfspace.repository.PostRepository;
 import com.thehalfspace.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,6 +35,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final MatchRepository matchRepository;
     private final UserRepository userRepository;
+    private final PostRepository postRepository;
 
     public Page<CommentResponse> getMatchComments(Long matchId, Pageable pageable) {
         Page<Comment> roots = commentRepository.findByMatchIdAndParentIsNullOrderByCreatedAtAsc(matchId, pageable);
@@ -59,6 +62,34 @@ public class CommentService {
         Comment parent = resolveParent(request.parentId());
 
         Comment comment = Comment.ofMatch(match, author, parent, request.content());
+        return CommentResponse.from(commentRepository.save(comment));
+    }
+
+    public Page<CommentResponse> getPostComments(Long postId, Pageable pageable) {
+        Page<Comment> roots = commentRepository.findByPostIdAndParentIsNullOrderByCreatedAtAsc(postId, pageable);
+
+        List<Long> rootIds = roots.getContent().stream().map(Comment::getId).toList();
+        Map<Long, List<CommentResponse>> repliesByParent = commentRepository
+                .findByParentIdInOrderByCreatedAtAsc(rootIds)
+                .stream()
+                .map(CommentResponse::from)
+                .collect(Collectors.groupingBy(CommentResponse::parentId));
+
+        return roots.map(root -> CommentResponse.from(
+                root, repliesByParent.getOrDefault(root.getId(), List.of())
+        ));
+    }
+
+    @Transactional
+    public CommentResponse createPostComment(Long postId, Long userId, CommentRequest request) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new NotFoundException(ErrorCode.POST_NOT_FOUND));
+        User author = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException(ErrorCode.NOT_FOUND));
+
+        Comment parent = resolveParent(request.parentId());
+
+        Comment comment = Comment.ofPost(post, author, parent, request.content());
         return CommentResponse.from(commentRepository.save(comment));
     }
 

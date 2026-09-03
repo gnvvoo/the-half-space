@@ -13,9 +13,13 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 
     Page<Comment> findByMatchIdAndParentIsNullOrderByCreatedAtAsc(Long matchId, Pageable pageable);
 
+    Page<Comment> findByPostIdAndParentIsNullOrderByCreatedAtAsc(Long postId, Pageable pageable);
+
     List<Comment> findByParentIdInOrderByCreatedAtAsc(List<Long> parentIds);
 
     long countByMatchId(Long matchId);
+
+    long countByPostId(Long postId);
 
     @Query("select c.match.id as matchId, count(c) as cnt from Comment c " +
             "where c.match.id in :matchIds group by c.match.id")

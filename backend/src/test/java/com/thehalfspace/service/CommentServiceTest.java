@@ -9,6 +9,7 @@ import com.thehalfspace.exception.BusinessException;
 import com.thehalfspace.exception.NotFoundException;
 import com.thehalfspace.repository.CommentRepository;
 import com.thehalfspace.repository.MatchRepository;
+import com.thehalfspace.repository.PostRepository;
 import com.thehalfspace.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,7 @@ class CommentServiceTest {
     private CommentRepository commentRepository;
     private MatchRepository matchRepository;
     private UserRepository userRepository;
+    private PostRepository postRepository;
 
     private CommentService commentService;
 
@@ -39,8 +41,9 @@ class CommentServiceTest {
         commentRepository = mock(CommentRepository.class);
         matchRepository = mock(MatchRepository.class);
         userRepository = mock(UserRepository.class);
+        postRepository = mock(PostRepository.class);
 
-        commentService = new CommentService(commentRepository, matchRepository, userRepository);
+        commentService = new CommentService(commentRepository, matchRepository, userRepository, postRepository);
     }
 
     private User userWithId(Long id) {

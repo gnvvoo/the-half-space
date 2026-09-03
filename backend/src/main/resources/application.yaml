@@ -17,6 +17,19 @@ spring:
     job:
       enabled: false  # 스케줄러로만 실행, 애플리케이션 시작 시 자동 실행 방지
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
 cli:
   path: ${CLI_PATH:./cli/football-cli}
   api-key: ${FOOTBALL_DATA_API_KEY:}

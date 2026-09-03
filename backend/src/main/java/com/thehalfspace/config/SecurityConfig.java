@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("GET", "/actuator/health", "/actuator/health/**", "/actuator/prometheus").permitAll()
                         .requestMatchers("GET", "/api/v1/matches/**").permitAll()
                         .requestMatchers("GET", "/api/v1/standings").permitAll()
                         .requestMatchers("GET", "/api/v1/teams/**").permitAll()

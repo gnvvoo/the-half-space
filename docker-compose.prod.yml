@@ -19,6 +19,12 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # football-agent(AgentService가 ProcessBuilder로 실행하는 하위 프로세스)가 요구하는 환경변수.
+      # FOOTBALL_CLI_PATH는 이미지 레이아웃에 고정된 값(backend/Dockerfile 참고)이라 비밀값이
+      # 아니므로 여기 직접 명시한다. GEMINI_API_KEY/FOOTBALL_DATA_API_KEY는 env_file(.env)로도
+      # 컨테이너에 주입되지만, football-agent가 필요로 하는 값임을 명시적으로 드러내기 위해 함께 적는다.
+      FOOTBALL_CLI_PATH: /app/cli/football-cli
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     depends_on:
       - postgres
       - redis

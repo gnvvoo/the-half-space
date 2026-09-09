@@ -59,3 +59,8 @@ spring:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  agent:
+    # backend/Dockerfile이 football-agent를 /app/bin/football-agent에 빌드해 동봉한다
+    # (WORKDIR이 /app이라 application.yaml의 기본값 ./bin/football-agent도 결과적으로 동일한
+    # 경로를 가리키지만, 운영에서는 CWD 가정에 의존하지 않도록 절대경로로 명시한다).
+    binary-path: ${AGENT_BINARY_PATH:/app/bin/football-agent}

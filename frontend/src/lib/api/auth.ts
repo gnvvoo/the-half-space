@@ -36,7 +36,7 @@ interface AccessTokenClaims {
 
 /**
  * 액세스 토큰의 payload(JWT 두 번째 세그먼트)를 검증 없이 디코딩한다.
- * 백엔드에 GET /users/me가 아직 없어, userId/email은 토큰 클레임에서 읽는다.
+ * GET /users/me 조회가 실패할 때 userId/email을 채우는 폴백으로 사용한다.
  */
 function decodeAccessToken(accessToken: string): AccessTokenClaims {
   const payload = accessToken.split(".")[1];
@@ -114,5 +114,5 @@ export async function refresh(refreshToken: string): Promise<AuthTokens> {
   return { accessToken: res.accessToken, refreshToken: res.refreshToken, expiresIn: res.expiresIn };
 }
 
-export { decodeAccessToken };
+export { decodeAccessToken, buildUser };
 export type { AccessTokenClaims };

@@ -1,4 +1,5 @@
-import { apiFetch } from "./http";
+import { apiFetch, authHeaders, ApiRequestError } from "./http";
+import { clearStoredAuth, getStoredTokens, updateStoredTokens } from "../auth-storage";
 import type { User } from "../types";
 
 export interface LoginPayload {
@@ -112,6 +113,59 @@ export async function refresh(refreshToken: string): Promise<AuthTokens> {
     body: JSON.stringify({ refreshToken }),
   });
   return { accessToken: res.accessToken, refreshToken: res.refreshToken, expiresIn: res.expiresIn };
+}
+
+let refreshPromise: Promise<string> | null = null;
+
+/**
+ * 저장된 refreshToken으로 액세스 토큰을 재발급한다. 동시에 여러 요청에서 401이
+ * 발생해도 재발급은 한 번만 보내도록 in-flight Promise를 공유한다(스탬피드 방지).
+ */
+function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const { refreshToken } = getStoredTokens();
+      if (!refreshToken) throw new Error("리프레시 토큰이 없습니다.");
+      const tokens = await refresh(refreshToken);
+      updateStoredTokens(tokens.accessToken, tokens.refreshToken);
+      return tokens.accessToken;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+/**
+ * 인증이 필요한 요청 전용 wrapper. 액세스 토큰 만료(401)를 받으면 refreshToken으로
+ * 한 번 재발급받아 재시도하고, 재발급도 실패하면 로그아웃 상태로 되돌린 뒤 원래 401
+ * 에러를 그대로 던진다(호출부는 기존 에러 처리 로직을 그대로 쓸 수 있다).
+ */
+export async function authFetch<T>(
+  path: string,
+  accessToken: string | null,
+  init?: RequestInit
+): Promise<T> {
+  const headers = { ...authHeaders(accessToken), ...init?.headers };
+
+  try {
+    return await apiFetch<T>(path, { ...init, headers });
+  } catch (err) {
+    if (!accessToken || !(err instanceof ApiRequestError) || err.status !== 401) {
+      throw err;
+    }
+
+    try {
+      const newAccessToken = await refreshAccessToken();
+      return await apiFetch<T>(path, {
+        ...init,
+        headers: { ...authHeaders(newAccessToken), ...init?.headers },
+      });
+    } catch {
+      clearStoredAuth();
+      throw err;
+    }
+  }
 }
 
 export { decodeAccessToken, buildUser };

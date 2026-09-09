@@ -1,5 +1,6 @@
 import type { Comment, Page } from "../types";
-import { apiFetch, authHeaders } from "./http";
+import { apiFetch } from "./http";
+import { authFetch } from "./auth";
 
 interface CommentResponseDto {
   id: number;
@@ -62,9 +63,8 @@ export async function createMatchComment(
   accessToken: string,
   draft: CommentDraft
 ): Promise<Comment> {
-  const raw = await apiFetch<CommentResponseDto>(`/matches/${matchId}/comments`, {
+  const raw = await authFetch<CommentResponseDto>(`/matches/${matchId}/comments`, accessToken, {
     method: "POST",
-    headers: authHeaders(accessToken),
     body: JSON.stringify(draft),
   });
   return mapComment(raw);
@@ -89,9 +89,8 @@ export async function createPostComment(
   accessToken: string,
   draft: CommentDraft
 ): Promise<Comment> {
-  const raw = await apiFetch<CommentResponseDto>(`/posts/${postId}/comments`, {
+  const raw = await authFetch<CommentResponseDto>(`/posts/${postId}/comments`, accessToken, {
     method: "POST",
-    headers: authHeaders(accessToken),
     body: JSON.stringify(draft),
   });
   return mapComment(raw);
@@ -99,10 +98,7 @@ export async function createPostComment(
 
 // DELETE /comments/{id}
 export async function deleteComment(id: string, accessToken: string): Promise<void> {
-  await apiFetch<void>(`/comments/${id}`, {
-    method: "DELETE",
-    headers: authHeaders(accessToken),
-  });
+  await authFetch<void>(`/comments/${id}`, accessToken, { method: "DELETE" });
 }
 
 /** 현재 페이지에 로드된 댓글(대댓글 포함) 총 개수. */

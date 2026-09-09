@@ -15,6 +15,29 @@ COPY cli ./cli
 
 RUN ./gradlew bootJar --no-daemon -x test
 
+# ---- Go agent/cli builder stage ---------------------------------------------
+# football-agent(github.com/gnvvoo/football-agent)와 football-cli(github.com/gnvvoo/football-cli)는
+# 이 백엔드 리포지토리 밖에서 관리되는 별도 Go 프로젝트다. 소스를 이 리포에 커밋하는 대신 이미지
+# 빌드 시점에 clone + build한다. ARG로 브랜치/태그/커밋 SHA를 지정해 재현 가능하게 고정할 수 있다.
+# 기본값(main)은 각 리포의 main 브랜치를 가리킨다 — football-agent의 비대화형 모드
+# (--type/--match/--output, AgentService가 호출하는 형태)는 feat/non-interactive-mode PR이 main에
+# 병합된 이후에만 main 기준 빌드로 동작한다. 병합 전에 이 기능을 테스트하려면
+# `--build-arg FOOTBALL_AGENT_REF=feat/non-interactive-mode`로 오버라이드할 것.
+FROM golang:1.26-alpine AS agent-build
+ARG FOOTBALL_AGENT_REF=main
+ARG FOOTBALL_CLI_REF=main
+RUN apk add --no-cache git
+
+WORKDIR /src/football-agent
+RUN git clone https://github.com/gnvvoo/football-agent.git . \
+    && git checkout ${FOOTBALL_AGENT_REF}
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/football-agent .
+
+WORKDIR /src/football-cli
+RUN git clone https://github.com/gnvvoo/football-cli.git . \
+    && git checkout ${FOOTBALL_CLI_REF}
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/football-cli .
+
 # ---- Runtime stage ----------------------------------------------------------
 FROM eclipse-temurin:21-jre AS runtime
 WORKDIR /app
@@ -24,22 +47,12 @@ RUN groupadd --system spring && useradd --system --gid spring spring
 
 COPY --from=build /workspace/build/libs/*.jar app.jar
 
-# football-cli (Go CLI, 리포지토리에 리눅스 바이너리로 커밋되어 있음) 동봉
-COPY --from=build /workspace/cli/football-cli /app/cli/football-cli
-RUN chmod +x /app/cli/football-cli
-
-# TODO(football-agent): app.agent.binary-path(./bin/football-agent)에 해당하는 Go CLI 바이너리가
-# 아직 이 리포지토리에 커밋되어 있지 않다 (backend/cli/football-cli와 달리 backend/bin/football-agent
-# 경로가 존재하지 않음). 패키징 방식 결정 필요:
-#   (a) 이미지 동봉: football-cli처럼 리눅스 바이너리를 리포에 커밋하고 아래 COPY 주석 해제, 또는
-#       CI에서 함께 빌드하는 별도 스테이지 추가
-#   (b) 사이드카: 별도 컨테이너/프로세스로 분리하고 이 앱은 그 엔드포인트를 호출하도록 AgentService 변경
-# 바이너리가 없으면 AgentService.runAgent() 호출 시 ProcessBuilder가 실패한다 (AI 프리뷰/리뷰 생성 불가).
-# 결정 및 실제 반영은 Phase 1.1 실행 시점(football-agent 소스/빌드 산출물 확보 후)으로 미룬다.
-# COPY --from=build /workspace/bin/football-agent /app/bin/football-agent
-# RUN chmod +x /app/bin/football-agent
-
-RUN mkdir -p /app/bin && chown -R spring:spring /app
+# football-agent / football-cli: agent-build 스테이지에서 소스로부터 새로 빌드한 바이너리를 동봉한다.
+# backend/cli/football-cli(리포에 커밋된 리눅스 바이너리, 과거 dead code인 CliRunner 검증용)는 git
+# 히스토리에는 남겨두되 이미지에는 더 이상 사용하지 않는다.
+COPY --from=agent-build /out/football-agent /app/bin/football-agent
+COPY --from=agent-build /out/football-cli /app/cli/football-cli
+RUN chmod +x /app/bin/football-agent /app/cli/football-cli && chown -R spring:spring /app
 USER spring
 
 ENV SPRING_PROFILES_ACTIVE=prod

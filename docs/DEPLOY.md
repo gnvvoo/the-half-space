@@ -204,10 +204,54 @@ Grafana Alerting 하나뿐).
 - **디스크 80% 알림**: 실제로 디스크를 채우는 테스트는 위험하므로, Grafana Alerting UI에서 규칙의
   "Test rule"로 쿼리 결과만 확인하는 것으로 대체 권장.
 
-## 참고: football-agent 바이너리 미결 사항
+## 10. football-agent / football-cli 패키징
 
-`backend/Dockerfile`에 TODO로 남겨둔 대로, `app.agent.binary-path`가 가리키는 `football-agent`
-Go CLI 바이너리는 아직 이 저장소에 커밋되어 있지 않다 (`backend/cli/football-cli`와 달리
-`backend/bin/football-agent` 경로 없음). 이미지 동봉(binary를 리포에 추가) 또는 사이드카(별도
-프로세스/컨테이너로 분리) 중 방식을 결정해 `backend/Dockerfile`의 TODO 블록을 채워야 AI 프리뷰/리뷰
-자동 생성이 동작한다.
+`AgentService`(`backend/src/main/java/com/thehalfspace/service/AgentService.java`)는
+`${app.agent.binary-path}`에 위치한 `football-agent` 바이너리를
+`--type preview|review --match <id> --output json` 인자로 실행해 AI 프리뷰/리뷰를 생성한다.
+football-agent는 다시 자신의 `FOOTBALL_CLI_PATH` 환경변수가 가리키는 `football-cli` 바이너리를
+하위 프로세스로 실행한다. 두 바이너리 모두 이 리포지토리 밖에서 관리되는 별도 Go 프로젝트다:
+
+- [football-agent](https://github.com/gnvvoo/football-agent) — Gemini 2.5 Flash Tool Use 에이전트
+- [football-cli](https://github.com/gnvvoo/football-cli) — football-data.org 조회 CLI
+
+### 패키징 방식: 이미지 빌드 시점에 소스로부터 빌드
+
+바이너리를 리포에 커밋하지 않고, `backend/Dockerfile`의 Go 빌더 스테이지(`golang:1.26-alpine`)에서
+매 이미지 빌드마다 두 리포지토리를 clone해 `linux/amd64` 정적 바이너리로 빌드한 뒤 런타임 이미지에
+동봉한다:
+
+- `FOOTBALL_AGENT_REF`, `FOOTBALL_CLI_REF` 빌드 인자로 브랜치/태그/커밋 SHA를 지정해 재현 가능하게
+  고정한다 (기본값은 각 리포의 `main` 브랜치). CI에서는 특정 커밋 SHA로 고정하는 것을 권장한다.
+  ```bash
+  docker build -f backend/Dockerfile \
+    --build-arg FOOTBALL_AGENT_REF=<commit-sha-or-tag> \
+    --build-arg FOOTBALL_CLI_REF=<commit-sha-or-tag> \
+    -t ths-backend:manual backend
+  ```
+- 결과 바이너리는 각각 `/app/bin/football-agent`, `/app/cli/football-cli`에 위치하며 `spring`
+  사용자 소유, 실행 권한이 부여된다.
+- football-agent의 비대화형 모드(`--type/--match/--output`)는
+  [PR #1](https://github.com/gnvvoo/football-agent/pull/1)로 `main`에 병합 완료(2026-09-09).
+  기본 `FOOTBALL_AGENT_REF=main` 빌드에 포함된다.
+- `backend/cli/football-cli`(리포에 커밋된 리눅스 바이너리)는 과거 `CliRunner`(현재 어떤 배치/서비스도
+  호출하지 않는 dead code — 실제 football-data.org 호출 경로는 `FootballApiClient`/`RestClient`)
+  검증용으로 git 히스토리에는 남겨두지만, 이미지에는 더 이상 이 파일을 사용하지 않는다. `CliRunner`와
+  이 커밋된 바이너리 자체를 리포에서 제거할지는 이 문서의 범위 밖이며 별도로 결정한다.
+
+### 필요한 환경변수
+
+| 변수 | 용도 | 설정 위치 |
+|------|------|-----------|
+| `AGENT_BINARY_PATH` | football-agent 바이너리 경로 (기본값 `/app/bin/football-agent`, 이미지 레이아웃과 일치) | `application-prod.yaml` 기본값, 필요 시 `.env`로 오버라이드 |
+| `FOOTBALL_CLI_PATH` | football-agent가 실행할 football-cli 바이너리 경로 (`/app/cli/football-cli`, 이미지 레이아웃 고정값) | `docker-compose.prod.yml` backend 서비스에 하드코딩 |
+| `GEMINI_API_KEY` | football-agent가 사용하는 Google Gemini API 키 | `.env` → `docker-compose.prod.yml` backend 서비스 |
+| `FOOTBALL_DATA_API_KEY` | football-cli(및 backend 자체 `FootballApiClient`)가 사용하는 football-data.org API 키 | `.env` (env_file로 컨테이너에 자동 주입) |
+
+`GEMINI_API_KEY`/`FOOTBALL_DATA_API_KEY`는 `env_file: .env`로도 컨테이너에 주입되지만,
+`docker-compose.prod.yml`에서 football-agent가 필요로 하는 값임을 명시적으로 드러내기 위해
+backend 서비스의 `environment:` 블록에도 함께 적어둔다 (같은 값을 두 경로로 주입해도 무해하다).
+
+- [USER ACTION] `.env`의 `GEMINI_API_KEY`가 비어있지 않은지 확인 (Google AI Studio에서 발급).
+  비어있으면 football-agent가 기동 즉시 종료하고(exit 1) `AgentService.runAgent()`가
+  `AgentException`을 던진다.

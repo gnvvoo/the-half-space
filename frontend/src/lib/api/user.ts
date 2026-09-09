@@ -1,4 +1,4 @@
-import { apiFetch, authHeaders } from "./http";
+import { authFetch } from "./auth";
 import type { User } from "../types";
 
 interface UserProfileResponseDto {
@@ -25,8 +25,6 @@ function mapUserProfile(raw: UserProfileResponseDto): User {
 
 // GET /users/me
 export async function fetchCurrentUser(accessToken: string): Promise<User> {
-  const res = await apiFetch<UserProfileResponseDto>("/users/me", {
-    headers: authHeaders(accessToken),
-  });
+  const res = await authFetch<UserProfileResponseDto>("/users/me", accessToken);
   return mapUserProfile(res);
 }

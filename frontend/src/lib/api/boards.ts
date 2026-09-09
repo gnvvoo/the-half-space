@@ -1,5 +1,6 @@
 import type { Board, BoardCode, Page, Post } from "../types";
-import { apiFetch, authHeaders, ApiRequestError } from "./http";
+import { apiFetch, ApiRequestError } from "./http";
+import { authFetch } from "./auth";
 
 interface BoardResponseDto {
   id: number;
@@ -88,9 +89,8 @@ export async function createPost(
   accessToken: string,
   draft: PostDraft
 ): Promise<Post> {
-  const raw = await apiFetch<PostResponseDto>(`/boards/${boardId}/posts`, {
+  const raw = await authFetch<PostResponseDto>(`/boards/${boardId}/posts`, accessToken, {
     method: "POST",
-    headers: authHeaders(accessToken),
     body: JSON.stringify(draft),
   });
   return mapPost(raw);
@@ -113,9 +113,8 @@ export async function updatePost(
   accessToken: string,
   draft: PostDraft
 ): Promise<Post> {
-  const raw = await apiFetch<PostResponseDto>(`/posts/${id}`, {
+  const raw = await authFetch<PostResponseDto>(`/posts/${id}`, accessToken, {
     method: "PUT",
-    headers: authHeaders(accessToken),
     body: JSON.stringify(draft),
   });
   return mapPost(raw);
@@ -123,8 +122,5 @@ export async function updatePost(
 
 // DELETE /posts/{id}
 export async function deletePost(id: string, accessToken: string): Promise<void> {
-  await apiFetch<void>(`/posts/${id}`, {
-    method: "DELETE",
-    headers: authHeaders(accessToken),
-  });
+  await authFetch<void>(`/posts/${id}`, accessToken, { method: "DELETE" });
 }

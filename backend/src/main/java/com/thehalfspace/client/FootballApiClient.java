@@ -2,6 +2,7 @@ package com.thehalfspace.client;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.thehalfspace.entity.Competition;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,7 +17,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class FootballApiClient {
 
+    private static final String API_CALLS_METRIC_NAME = "halfspace_football_api_calls_total";
+
     private final RestClient footballRestClient;
+    private final MeterRegistry meterRegistry;
+
+    // football-data.org 호출 결과를 outcome(success/error) 태그로 카운팅한다.
+    // 무료 티어 호출량 상한 감시용 (infra/prometheus/alert-rules.yml 참고).
+    private void recordApiCall(String outcome) {
+        meterRegistry.counter(API_CALLS_METRIC_NAME, "outcome", outcome).increment();
+    }
 
     // --- Response DTOs ---
 
@@ -57,8 +67,10 @@ public class FootballApiClient {
                             competition.getCompetitionId(), from, to)
                     .retrieve()
                     .body(MatchesResponse.class);
+            recordApiCall("success");
             return response != null && response.matches() != null ? response.matches() : List.of();
         } catch (RestClientException e) {
+            recordApiCall("error");
             log.error("경기 조회 실패 - {}: {}", competition.getCompetitionId(), e.getMessage());
             return List.of();
         }
@@ -70,6 +82,7 @@ public class FootballApiClient {
                     .uri("/competitions/{id}/standings", competition.getCompetitionId())
                     .retrieve()
                     .body(StandingsResponse.class);
+            recordApiCall("success");
 
             if (response == null || response.standings() == null) return List.of();
 
@@ -79,6 +92,7 @@ public class FootballApiClient {
                     .map(StandingTableDto::table)
                     .orElse(List.of());
         } catch (RestClientException e) {
+            recordApiCall("error");
             log.error("순위 조회 실패 - {}: {}", competition.getCompetitionId(), e.getMessage());
             return List.of();
         }

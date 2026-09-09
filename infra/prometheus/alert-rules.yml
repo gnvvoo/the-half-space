@@ -25,3 +25,23 @@ groups:
         annotations:
           summary: "5xx 응답 비율이 5%를 초과했습니다"
           description: "최근 5분간 HTTP 5xx 비율이 5%를 초과했습니다."
+
+      - alert: BatchJobFailure
+        expr: sum by (job) (increase(halfspace_batch_job_result_total{result="failure"}[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "배치 잡({{ $labels.job }})이 실패했습니다"
+          description: "최근 15분 이내 preview/review 생성 배치 잡에서 1건 이상의 실패가 감지되었습니다."
+
+      - alert: FootballApiCallRateNearLimit
+        # football-data.org 무료 티어 한도는 10 req/min. 순간적인 버스트로 오탐하지 않도록
+        # 1분 호출률(rate*60)이 한도의 80%(8/min)를 5분 이상 지속할 때만 경고한다.
+        expr: sum(rate(halfspace_football_api_calls_total[1m])) * 60 > 8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "football-data API 호출량이 무료 티어 한도에 근접했습니다"
+          description: "최근 5분간 football-data API 호출률이 분당 8회(무료 티어 10 req/min의 80%)를 초과해 유지되었습니다."

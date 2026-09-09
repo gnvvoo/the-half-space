@@ -148,8 +148,21 @@ prometheus/grafana 컨테이너가 이를 수집·시각화·알림한다.
   JSON 파일을 직접 수정할 것).
 - 더 상세한 표준 대시보드가 필요하면 Grafana 공식 "JVM (Micrometer)" 대시보드(ID: 4701) 또는
   "Spring Boot Statistics"(ID: 12900)를 Grafana UI에서 Import해서 병행 사용할 수 있다.
-- football-data API 호출 수(무료 티어 10 req/min 한도 감시)는 별도 커스텀 메트릭이 아직 없으므로
-  이 대시보드에 포함되지 않았다 — 배치/agent 코드에 Micrometer 카운터를 추가하는 후속 작업 필요.
+
+### 커스텀 메트릭
+
+배치 잡 성공/실패와 football-data API 호출량을 감시하기 위해 다음 Micrometer 카운터를
+`/actuator/prometheus`에 노출한다:
+
+- `halfspace_batch_job_result_total{job="preview|review", result="success|failure"}` —
+  preview/review 생성 배치 잡(`PreviewGenerationJobConfig`, `ReviewGenerationJobConfig`)에 등록된
+  공용 `BatchMetricsListener`(`JobExecutionListener`)가 `afterJob()`에서 잡 상태에 따라 증가시킨다.
+- `halfspace_football_api_calls_total{outcome="success|error"}` — football-data.org를 직접 호출하는
+  `FootballApiClient`(`fetchMatches`, `fetchStandings`)의 유일한 호출 지점에서 성공/예외 여부에 따라
+  증가시킨다. 무료 티어 호출 한도(10 req/min) 감시가 목적이다.
+
+두 메트릭 모두 아직 `halfspace-jvm-http.json` 대시보드에는 패널로 추가되어 있지 않다(알림 규칙으로만
+감시 중) — 대시보드 시각화가 필요해지면 후속 작업으로 패널을 추가할 것.
 
 ### Discord 알림 웹훅 설정 [USER ACTION]
 
@@ -168,8 +181,13 @@ prometheus/grafana 컨테이너가 이를 수집·시각화·알림한다.
 - **Backend Down**: `up{job="backend"} == 0`이 2분 지속 시 critical
 - **High 5xx Rate**: 5분간 5xx 응답 비율이 5% 초과 시 warning
 - **Disk Usage Above 80%**: 루트 파티션 사용량 80% 초과가 5분 지속 시 warning (node-exporter 필요)
+- **Batch Job Failure**: 최근 15분간 `halfspace_batch_job_result_total{result="failure"}`가 1건이라도
+  증가하면 즉시 warning (preview/review 배치 잡 중 어느 쪽이든 실패 시 `job` 라벨로 구분되어 알림)
+- **Football API Call Rate Near Limit**: `halfspace_football_api_calls_total`의 분당 호출률이 8회
+  (무료 티어 한도 10 req/min의 80%)를 초과한 상태가 5분 이상 지속되면 warning — 순간 버스트로 인한
+  오탐을 피하면서 한도 도달 전에 조기 경고하기 위한 임계값
 
-세 규칙 모두 `discord` contact point로 알림이 전송된다. `infra/prometheus/alert-rules.yml`에는
+다섯 규칙 모두 `discord` contact point로 알림이 전송된다. `infra/prometheus/alert-rules.yml`에는
 동일 조건의 Prometheus 룰 파일도 참고용으로 함께 두었다(Alertmanager 미도입으로 실제 발송 경로는
 Grafana Alerting 하나뿐).
 
@@ -177,9 +195,12 @@ Grafana Alerting 하나뿐).
 
 - **backend 다운 알림 확인**: `docker compose -f docker-compose.prod.yml stop backend` 후 2분 대기,
   Discord 채널에 알림 도착 확인. 확인 후 `docker compose -f docker-compose.prod.yml start backend`로 복구.
-- **배치 실패 알림**: 현재 배치 잡 실패를 감지하는 전용 알림 규칙은 없음(위 "대시보드 위치" 참고 —
-  커스텀 메트릭 후속 작업 필요). 우선은 `docker compose -f docker-compose.prod.yml logs backend`에서
-  배치 실행 로그를 육안 확인하는 것으로 대체.
+- **배치 실패 알림 확인**: preview/review 배치 잡이 실패하도록 유도(예: 잘못된 설정으로 일시
+  중단)한 뒤 다음 실행 주기까지 대기, Discord 채널에 "Batch Job Failure" 알림 도착 확인. 평시에는
+  `docker compose -f docker-compose.prod.yml logs backend`에서 배치 실행 로그로 보조 확인.
+- **football API 호출량 알림**: 실제로 한도를 넘기는 테스트는 API 키 소진 위험이 있으므로, Grafana
+  Alerting UI에서 "Football API Call Rate Near Limit" 규칙의 "Test rule"로 쿼리 결과만 확인하는 것으로
+  대체 권장.
 - **디스크 80% 알림**: 실제로 디스크를 채우는 테스트는 위험하므로, Grafana Alerting UI에서 규칙의
   "Test rule"로 쿼리 결과만 확인하는 것으로 대체 권장.
 

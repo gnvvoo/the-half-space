@@ -42,7 +42,7 @@ public class CommentService {
 
         List<Long> rootIds = roots.getContent().stream().map(Comment::getId).toList();
         Map<Long, List<CommentResponse>> repliesByParent = commentRepository
-                .findByParentIdInOrderByCreatedAtAsc(rootIds)
+                .findByParentIdInAndDeletedFalseOrderByCreatedAtAsc(rootIds)
                 .stream()
                 .map(CommentResponse::from)
                 .collect(Collectors.groupingBy(CommentResponse::parentId));
@@ -70,7 +70,7 @@ public class CommentService {
 
         List<Long> rootIds = roots.getContent().stream().map(Comment::getId).toList();
         Map<Long, List<CommentResponse>> repliesByParent = commentRepository
-                .findByParentIdInOrderByCreatedAtAsc(rootIds)
+                .findByParentIdInAndDeletedFalseOrderByCreatedAtAsc(rootIds)
                 .stream()
                 .map(CommentResponse::from)
                 .collect(Collectors.groupingBy(CommentResponse::parentId));

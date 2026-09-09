@@ -2,10 +2,13 @@ package com.thehalfspace.service;
 
 import com.thehalfspace.dto.CommentRequest;
 import com.thehalfspace.dto.CommentResponse;
+import com.thehalfspace.dto.MatchDiscussionResponse;
 import com.thehalfspace.entity.Board;
 import com.thehalfspace.entity.Comment;
 import com.thehalfspace.entity.Match;
+import com.thehalfspace.entity.MatchStatus;
 import com.thehalfspace.entity.Post;
+import com.thehalfspace.entity.Team;
 import com.thehalfspace.entity.User;
 import com.thehalfspace.exception.BusinessException;
 import com.thehalfspace.exception.NotFoundException;
@@ -21,6 +24,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -186,7 +190,7 @@ class CommentServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
         when(commentRepository.findByPostIdAndParentIsNullOrderByCreatedAtAsc(1L, pageable))
                 .thenReturn(new PageImpl<>(List.of(root), pageable, 1));
-        when(commentRepository.findByParentIdInOrderByCreatedAtAsc(List.of(1L)))
+        when(commentRepository.findByParentIdInAndDeletedFalseOrderByCreatedAtAsc(List.of(1L)))
                 .thenReturn(List.of(reply));
 
         Page<CommentResponse> result = commentService.getPostComments(1L, pageable);
@@ -208,7 +212,7 @@ class CommentServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
         when(commentRepository.findByMatchIdAndParentIsNullOrderByCreatedAtAsc(1L, pageable))
                 .thenReturn(new PageImpl<>(List.of(root), pageable, 1));
-        when(commentRepository.findByParentIdInOrderByCreatedAtAsc(List.of(1L)))
+        when(commentRepository.findByParentIdInAndDeletedFalseOrderByCreatedAtAsc(List.of(1L)))
                 .thenReturn(List.of(reply));
 
         Page<CommentResponse> result = commentService.getMatchComments(1L, pageable);
@@ -216,5 +220,87 @@ class CommentServiceTest {
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).replies()).hasSize(1);
         assertThat(result.getContent().get(0).replies().get(0).id()).isEqualTo(2L);
+    }
+
+    /**
+     * 삭제된 루트 댓글이 답글을 가진 경우, 리포지토리 쿼리(NOT EXISTS 기반)가 목록에 남겨두는
+     * 케이스를 서비스 레이어에서 재현한다 — 실제 제외/포함 여부는 CommentRepository의 JPQL이
+     * 담당하며(로컬에서는 Postgres가 필요해 contextLoads/CliRunnerTest와 동일하게 통합 테스트
+     * 대상), 여기서는 서비스가 그 결과를 올바르게 placeholder로 변환해 전달하는지 검증한다.
+     */
+    @Test
+    void getMatchComments_삭제된_루트도_답글이_있으면_placeholder로_유지된다() {
+        Match match = Match.builder().id(1L).build();
+        User author = userWithId(10L);
+        Comment deletedRoot = Comment.ofMatch(match, author, null, "루트 댓글");
+        ReflectionTestUtils.setField(deletedRoot, "id", 1L);
+        deletedRoot.softDelete();
+        Comment reply = Comment.ofMatch(match, author, deletedRoot, "답글");
+        ReflectionTestUtils.setField(reply, "id", 2L);
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(commentRepository.findByMatchIdAndParentIsNullOrderByCreatedAtAsc(1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(deletedRoot), pageable, 1));
+        // 삭제된 답글은 리포지토리 쿼리(AndDeletedFalse)가 애초에 걸러내므로, 살아있는 답글만 전달된다.
+        when(commentRepository.findByParentIdInAndDeletedFalseOrderByCreatedAtAsc(List.of(1L)))
+                .thenReturn(List.of(reply));
+
+        Page<CommentResponse> result = commentService.getMatchComments(1L, pageable);
+
+        CommentResponse rootResponse = result.getContent().get(0);
+        assertThat(rootResponse.deleted()).isTrue();
+        assertThat(rootResponse.content()).isNull();
+        assertThat(rootResponse.authorNickname()).isNull();
+        assertThat(rootResponse.replies()).hasSize(1);
+        assertThat(rootResponse.replies().get(0).id()).isEqualTo(2L);
+    }
+
+    @Test
+    void getMatchComments_답글_조회는_삭제되지_않은_답글만_조회하는_리포지토리_메서드를_사용한다() {
+        Match match = Match.builder().id(1L).build();
+        User author = userWithId(10L);
+        Comment root = Comment.ofMatch(match, author, null, "루트 댓글");
+        ReflectionTestUtils.setField(root, "id", 1L);
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(commentRepository.findByMatchIdAndParentIsNullOrderByCreatedAtAsc(1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(root), pageable, 1));
+        when(commentRepository.findByParentIdInAndDeletedFalseOrderByCreatedAtAsc(List.of(1L)))
+                .thenReturn(List.of());
+
+        commentService.getMatchComments(1L, pageable);
+
+        verify(commentRepository).findByParentIdInAndDeletedFalseOrderByCreatedAtAsc(List.of(1L));
+    }
+
+    /**
+     * "오늘의 토론장" commentCount는 삭제된 댓글을 제외해야 한다. 실제 제외는
+     * CommentRepository.countByMatchIdIn의 JPQL(c.deleted = false)이 담당하므로,
+     * 여기서는 서비스가 그 집계 결과를 MatchDiscussionResponse로 올바르게 전달하는지 검증한다.
+     */
+    @Test
+    void getTodayDiscussions_댓글수는_삭제되지_않은_댓글만_집계한_결과를_그대로_사용한다() {
+        Team homeTeam = Team.of(1L, "홈팀", "홈", "HOM", null, "PL");
+        Team awayTeam = Team.of(2L, "원정팀", "원정", "AWY", null, "PL");
+        Match match = Match.builder()
+                .id(1L)
+                .competitionId("PL")
+                .season("2025-26")
+                .homeTeam(homeTeam)
+                .awayTeam(awayTeam)
+                .status(MatchStatus.SCHEDULED)
+                .utcDate(Instant.now())
+                .build();
+
+        when(matchRepository.findByUtcDateBetweenOrderByUtcDate(any(), any())).thenReturn(List.of(match));
+        CommentRepository.MatchCommentCount count = mock(CommentRepository.MatchCommentCount.class);
+        when(count.getMatchId()).thenReturn(1L);
+        when(count.getCnt()).thenReturn(3L);
+        when(commentRepository.countByMatchIdIn(List.of(1L))).thenReturn(List.of(count));
+
+        List<MatchDiscussionResponse> result = commentService.getTodayDiscussions();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).commentCount()).isEqualTo(3L);
     }
 }

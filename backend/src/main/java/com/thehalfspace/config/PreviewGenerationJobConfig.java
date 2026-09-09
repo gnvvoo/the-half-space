@@ -1,5 +1,6 @@
 package com.thehalfspace.config;
 
+import com.thehalfspace.batch.BatchMetricsListener;
 import com.thehalfspace.entity.Match;
 import com.thehalfspace.exception.AgentException;
 import com.thehalfspace.service.AiContentService;
@@ -35,11 +36,13 @@ public class PreviewGenerationJobConfig {
 
     private final EntityManagerFactory entityManagerFactory;
     private final AiContentService aiContentService;
+    private final BatchMetricsListener batchMetricsListener;
 
     @Bean
     public Job previewGenerationJob(JobRepository jobRepository, Step previewGenerationStep) {
         return new JobBuilder("previewGenerationJob", jobRepository)
                 .start(previewGenerationStep)
+                .listener(batchMetricsListener)
                 .build();
     }
 

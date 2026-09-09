@@ -1,5 +1,6 @@
 package com.thehalfspace.config;
 
+import com.thehalfspace.batch.BatchMetricsListener;
 import com.thehalfspace.entity.Match;
 import com.thehalfspace.exception.AgentException;
 import com.thehalfspace.service.AiContentService;
@@ -30,11 +31,13 @@ public class ReviewGenerationJobConfig {
 
     private final EntityManagerFactory entityManagerFactory;
     private final AiContentService aiContentService;
+    private final BatchMetricsListener batchMetricsListener;
 
     @Bean
     public Job reviewGenerationJob(JobRepository jobRepository, Step reviewGenerationStep) {
         return new JobBuilder("reviewGenerationJob", jobRepository)
                 .start(reviewGenerationStep)
+                .listener(batchMetricsListener)
                 .build();
     }
 
